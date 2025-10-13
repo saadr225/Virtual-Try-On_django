@@ -1,7 +1,10 @@
 import streamlit as st
 from PIL import Image
 from io import BytesIO
-import google.generativeai as genai
+
+# Old SDK import replaced with new client-based SDK
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 # ----------------------------
 # CONFIGURATION
@@ -11,7 +14,9 @@ st.set_page_config(page_title="Virtual Try-On", page_icon="👗", layout="center
 # Your Gemini API key (replace if needed)
 API_KEY = "AIzaSyC_--RMQDVbN103-aNVqqypOBxxo7ITyLc"
 MODEL_NAME = "gemini-2.5-flash-image"
-genai.configure(api_key=API_KEY)
+
+# Initialize client using the new SDK
+client = genai.Client(api_key=API_KEY)
 
 st.title("👗 AI Virtual Try-On")
 st.write("Upload a person and clothing image — AI will realistically apply the outfit.")
@@ -83,9 +88,12 @@ if st.button("✨ Generate Virtual Try-On", use_container_width=True):
     try:
         with st.spinner("⏳ Generating realistic try-on... Please wait..."):
 
-            model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_prompt)
-
-            response = model.generate_content([final_prompt, img_person, img_cloth])
+            # Use new client.models.generate_content API (multimodal: prompt + images)
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=[final_prompt, img_person, img_cloth],
+                config=GenerateContentConfig(system_instruction=[system_prompt]),
+            )
 
             # ----------------------------
             # EXTRACT GENERATED IMAGE
