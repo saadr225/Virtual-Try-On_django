@@ -12,7 +12,6 @@ from google.genai.types import GenerateContentConfig
 st.set_page_config(page_title="Virtual Try-On", page_icon="👗", layout="centered")
 
 # Your Gemini API key (replace if needed)
-API_KEY = "AIzaSyC_--RMQDVbN103-aNVqqypOBxxo7ITyLc"
 MODEL_NAME = "gemini-2.5-flash-image"
 
 # Initialize client using the new SDK
