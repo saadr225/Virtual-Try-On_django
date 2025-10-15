@@ -19,7 +19,17 @@ class VTONController:
         # - Avoid modifying identity, expression, or scene background.
         # - Ensure results are modest, natural, and photorealistic.
         # """
-        self.system_prompt = """Your task is to perform a virtual try-on. First, digitally remove the original clothing from the person in the first image. Then, take the *exact* clothing item from the second image and superimpose it onto the person, making it fit their body and pose perfectly. **Crucially, do not change, modify, or reinterpret the clothing item in any way.** The texture, pattern, color, and shape must be preserved perfectly from the source image. The final output must be only the edited image of the person wearing the new clothing."""
+
+        # self.system_prompt = """Your task is to perform a virtual try-on. First, digitally remove the original clothing from the person in the first image. Then, take the *exact* clothing item from the second image and superimpose it onto the person, making it fit their body and pose perfectly. **Crucially, do not change, modify, or reinterpret the clothing item in any way.** The texture, pattern, color, and shape must be preserved perfectly from the source image. The final output must be only the edited image of the person wearing the new clothing."""
+
+        self.system_prompt = """You are an expert virtual try-on AI. You will be given a 'model image' and a 'garment image'. Your task is to create a new photorealistic image where the person from the 'model image' is wearing the clothing from the 'garment image'.
+
+    **Crucial Rules:**
+    1.  **Complete Garment Replacement:** You MUST completely REMOVE and REPLACE all the clothing items worn by the person in the 'model image' with the new garment (or garments if there is a two or more than two piece suit in the source image). No part of the original clothing (e.g., collars, sleeves, patterns) should be visible in the final image. The new garment should not be similar to the previous garment the person was wearing. It shouldn't imitate the style of the previous garment. The new garment should be look entierly like the person has changed clothes and wore the new garment.
+    2.  **Preserve the Model:** The person's face, hair, body shape, and pose from the 'model image' MUST remain unchanged.
+    3.  **Preserve the Background:** The entire background from the 'model image' MUST be preserved perfectly.
+    4.  **Apply the Garment:** Realistically fit the new garment onto the person. It should adapt to their pose with natural folds, shadows, and lighting consistent with the original scene. The applied garment size or dimensions should not change and should remain the same as in the source image.
+    5.  **Output:** Return ONLY the final, edited image. Do not include any text."""
 
         self.default_prompt = ""
 
