@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes, parser_class
 from django.http import HttpResponse
 from rest_framework.response import Response
 from api.serializers import VTONSerializer
-from app.Controllers.VTON_controller import VTONController
+from VTON_APP.app.Controllers.VTONController import VTONController
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from PIL import Image
