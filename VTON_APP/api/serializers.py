@@ -1,7 +1,46 @@
 from rest_framework import serializers
+from api.models import VTONRequest
+from app.Controllers.HelpersController import VTONRequestHelper
 
 
 class VTONSerializer(serializers.Serializer):
     person_image = serializers.FileField()
     clothing_image = serializers.FileField()
     instructions = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+
+class VTONResponseSerializer(serializers.ModelSerializer):
+    """
+    Serializer for VTON request response with public URLs
+    """
+
+    person_image_url = serializers.SerializerMethodField()
+    clothing_image_url = serializers.SerializerMethodField()
+    result_image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VTONRequest
+        fields = [
+            "request_id",
+            "person_image_url",
+            "clothing_image_url",
+            "result_image_url",
+            "instructions",
+            "status",
+            "error_message",
+            "created_at",
+            "updated_at",
+            "completed_at",
+        ]
+
+    def get_person_image_url(self, obj):
+        request = self.context.get("request")
+        return VTONRequestHelper.get_person_image_url(obj, request)
+
+    def get_clothing_image_url(self, obj):
+        request = self.context.get("request")
+        return VTONRequestHelper.get_clothing_image_url(obj, request)
+
+    def get_result_image_url(self, obj):
+        request = self.context.get("request")
+        return VTONRequestHelper.get_result_image_url(obj, request)

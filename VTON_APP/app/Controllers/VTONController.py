@@ -2,6 +2,8 @@ from PIL import Image
 from io import BytesIO
 from google import genai
 from google.genai.types import GenerateContentConfig
+import socket
+import requests
 
 
 class VTONController:
@@ -86,8 +88,31 @@ class VTONController:
 
             return generated_image
 
+        except socket.gaierror as e:
+            # Network/DNS resolution error
+            raise Exception(
+                "Network connection error: Unable to reach Google GenAI API. " "Please check your internet connection and try again. " f"Details: {str(e)}"
+            )
+        except requests.exceptions.ConnectionError as e:
+            # Connection error
+            raise Exception(
+                "Connection error: Unable to connect to Google GenAI API. " "Please check your internet connection or firewall settings. " f"Details: {str(e)}"
+            )
+        except requests.exceptions.Timeout as e:
+            # Timeout error
+            raise Exception("Request timeout: The API request took too long. " "Please try again later. " f"Details: {str(e)}")
         except Exception as e:
-            raise Exception(f"Virtual try-on generation failed: {str(e)}")
+            # Handle other exceptions with more specific error message
+            error_str = str(e).lower()
+            if "getaddrinfo failed" in error_str or "11001" in error_str:
+                raise Exception(
+                    "Network connection error: Unable to resolve Google GenAI API hostname. "
+                    "Please check your internet connection, DNS settings, or firewall configuration."
+                )
+            elif "api key" in error_str or "authentication" in error_str:
+                raise Exception("API authentication error: Invalid or missing API key. " "Please check your GOOGLE_GENAI_API_KEY configuration.")
+            else:
+                raise Exception(f"Virtual try-on generation failed: {str(e)}")
 
     def save_result(self, image, output_path):
         """
