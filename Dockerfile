@@ -29,7 +29,7 @@ COPY .env.example .env.example
 RUN mkdir -p VTON_APP/media/uploads VTON_APP/media/output VTON_APP/media/temp
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Set working directory to Django project
 WORKDIR /app/VTON_APP
@@ -37,4 +37,4 @@ WORKDIR /app/VTON_APP
 # Run migrations and start server
 CMD python manage.py makemigrations && \
     python manage.py migrate && \
-    python manage.py runserver 0.0.0.0:3000
+    python manage.py runserver 0.0.0.0:8080
