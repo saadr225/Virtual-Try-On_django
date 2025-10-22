@@ -52,7 +52,7 @@ def virtual_tryon(request):
         return Response({"error": "Clothing image is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     # Create database record
-    vton_request = VTONRequest(instructions=instructions, status="pending")
+    vton_request = VTONRequest(instructions=instructions, cloths_on=cloths_on, status="pending")
 
     try:
         # Save uploaded images with unique filenames
@@ -92,7 +92,10 @@ def virtual_tryon(request):
         vton_request.status = "processing"
         vton_request.save()
 
-        logger.info(f"Processing VTON request: {vton_request.request_id}")
+        # Log which processing flow is being used
+        flow_type = "cloth-on-model" if cloths_on else "garment-only"
+        logger.info(f"Processing VTON request: {vton_request.request_id} with flow type: {flow_type}")
+
         output_image = vton_controller.generate_virtual_tryon(person_image, clothing_image, instructions, cloths_on)
 
         # Save result image with unique filename

@@ -35,6 +35,7 @@ class VTONRequest(models.Model):
 
     # Request metadata
     instructions = models.TextField(blank=True, default="")
+    cloths_on = models.BooleanField(default=False, help_text="Indicates if the clothing image shows someone wearing the garment")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True, default="")
 

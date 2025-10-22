@@ -27,6 +27,7 @@ class VTONResponseSerializer(serializers.ModelSerializer):
             "clothing_image_url",
             "result_image_url",
             "instructions",
+            "cloths_on",
             "status",
             "error_message",
             "created_at",
