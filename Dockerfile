@@ -35,6 +35,8 @@ EXPOSE 8080
 WORKDIR /app/VTON_APP
 
 # Run migrations and start server
-CMD python manage.py makemigrations && \
-    python manage.py migrate && \
-    python manage.py runserver 8080
+# Copy startup script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
