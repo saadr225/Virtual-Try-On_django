@@ -41,6 +41,7 @@ def virtual_tryon(request):
     person_image_file = vton_serializer.validated_data.get("person_image")
     clothing_image_file = vton_serializer.validated_data.get("clothing_image")
     instructions = vton_serializer.validated_data.get("instructions", "")
+    cloths_on = vton_serializer.validated_data.get("cloths_on", False)
 
     # Validate required files
     if not person_image_file and not clothing_image_file:
@@ -92,7 +93,7 @@ def virtual_tryon(request):
         vton_request.save()
 
         logger.info(f"Processing VTON request: {vton_request.request_id}")
-        output_image = vton_controller.generate_virtual_tryon(person_image, clothing_image, instructions)
+        output_image = vton_controller.generate_virtual_tryon(person_image, clothing_image, instructions, cloths_on)
 
         # Save result image with unique filename
         logger.info(f"Saving result image for request: {vton_request.request_id}")

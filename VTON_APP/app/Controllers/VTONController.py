@@ -24,7 +24,8 @@ class VTONController:
 
         # self.system_prompt = """Your task is to perform a virtual try-on. First, digitally remove the original clothing from the person in the first image. Then, take the *exact* clothing item from the second image and superimpose it onto the person, making it fit their body and pose perfectly. **Crucially, do not change, modify, or reinterpret the clothing item in any way.** The texture, pattern, color, and shape must be preserved perfectly from the source image. The final output must be only the edited image of the person wearing the new clothing."""
 
-        self.system_prompt = """{
+        # System prompt when cloths_on = False (clothing image shows just the garment)
+        self.system_prompt_garment_only = """{
   "role": "system",
   "content": {
     "task": "You are an expert virtual try-on AI. You will be given a 'model image' and a 'garment image'. Your task is to create a new photorealistic image where the person from the 'model image' is wearing the clothing from the 'garment image'.",
@@ -38,14 +39,33 @@ class VTONController:
   }
 }"""
 
-        self.default_prompt = "Generate a realistic image of the person from the first image wearing the clothing from the second image. Ensure the clothing fits naturally on the person's body, maintaining the original pose, background, and lighting as much as possible. Do not alter the person's face, hair, or other features. Also do not alter the clothing in any way (design, dimensions etc.). The clothing should also be the same as in the source image."
+        # System prompt when cloths_on = True (clothing image shows someone wearing the garment)
+        self.system_prompt_cloths_on_model = """{
+  "role": "system",
+  "content": {
+    "task": "You are an expert virtual try-on AI. You will be given two images: a 'target model image' and a 'reference image showing someone wearing a garment'. Your task is to create a new photorealistic image where the person from the 'target model image' is wearing the EXACT SAME clothing that the person in the 'reference image' is wearing.",
+    "rules": {
+      "Extract the Garment": "First, identify and extract the clothing/garment being worn by the person in the 'reference image'. Pay close attention to the garment's design, pattern, color, texture, and style details.",
+      "Complete Garment Replacement": "You MUST completely REMOVE and REPLACE all the clothing items worn by the person in the 'target model image' with the extracted garment from the reference image. No part of the original clothing should be visible in the final image.",
+      "Preserve the Target Model": "The person's face, hair, body shape, and pose from the 'target model image' MUST remain unchanged.",
+      "Preserve the Background": "The entire background from the 'target model image' MUST be preserved perfectly.",
+      "Apply the Extracted Garment": "Realistically fit the extracted garment onto the target person. It should adapt to their pose with natural folds, shadows, and lighting consistent with the target model's scene. The garment's design, pattern, color, and dimensions should remain identical to what was worn in the reference image."
+    },
+    "output": "Return ONLY the final, edited image. Do not include any text."
+  }
+}"""
+
+        # Default user prompts for each flow
+        self.default_prompt_garment_only = "Generate a realistic image of the person from the first image wearing the clothing from the second image. Ensure the clothing fits naturally on the person's body, maintaining the original pose, background, and lighting as much as possible. Do not alter the person's face, hair, or other features. Also do not alter the clothing in any way (design, dimensions etc.). The clothing should also be the same as in the source image."
+
+        self.default_prompt_cloths_on_model = "Generate a realistic image of the person from the first image wearing the exact same clothing that the person in the second image is wearing. Extract the garment from the reference image and apply it to the target person. Ensure the clothing fits naturally on the target person's body, maintaining their original pose, background, and lighting. Do not alter the target person's face, hair, or other features. The clothing should be identical to what is worn in the reference image (same design, pattern, color, and dimensions)."
 
     #         """
     # Apply the clothing from the second image onto the person in the first image realistically.
     # Ensure the result looks natural, with proper fit and consistent lighting.
     # """
 
-    def generate_virtual_tryon(self, person_image, clothing_image, instructions=None):
+    def generate_virtual_tryon(self, person_image, clothing_image, instructions=None, cloths_on=False):
         """
         Generate virtual try-on image using Gemini AI
 
@@ -53,6 +73,8 @@ class VTONController:
             person_image: PIL Image object or file path
             clothing_image: PIL Image object or file path
             instructions: Optional custom instructions (string)
+            cloths_on: Boolean flag indicating if clothing_image shows someone wearing the garment (True)
+                     or just the garment alone (False). Default is False.
 
         Returns:
             PIL Image object of the generated result
@@ -64,8 +86,18 @@ class VTONController:
             if isinstance(clothing_image, str):
                 clothing_image = Image.open(clothing_image)
 
+            # Select appropriate prompts based on cloths_on flag
+            if cloths_on:
+                # Clothing image shows someone wearing the garment
+                system_prompt = self.system_prompt_cloths_on_model
+                default_prompt = self.default_prompt_cloths_on_model
+            else:
+                # Clothing image shows just the garment
+                system_prompt = self.system_prompt_garment_only
+                default_prompt = self.default_prompt_garment_only
+
             # Construct final prompt
-            final_prompt = self.default_prompt
+            final_prompt = default_prompt
             if instructions and instructions.strip():
                 final_prompt += "\nAlso, " + instructions.strip()
                 # final_prompt += instructions.strip()
@@ -74,7 +106,7 @@ class VTONController:
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[final_prompt, person_image, clothing_image],
-                config=GenerateContentConfig(system_instruction=[self.system_prompt]),
+                config=GenerateContentConfig(system_instruction=[system_prompt]),
             )
 
             # Extract generated image
