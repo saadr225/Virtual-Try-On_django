@@ -20,6 +20,8 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
+# Host URL for generating public URLs (e.g., https://yourdomain.com/)
+HOST_URL = os.getenv("HOST_URL", "http://localhost:8000/")
 
 # Application definition
 

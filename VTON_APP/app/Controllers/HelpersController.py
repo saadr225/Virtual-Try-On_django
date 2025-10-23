@@ -12,9 +12,10 @@ class URLHelper:
     def __init__(self) -> None:
         pass
 
+    @staticmethod
     def convert_to_public_url(file_path: str) -> str:
         """
-        Convert a file path to a public URL.
+        Convert a file path to a public URL using HOST_URL from settings.
 
         Args:
             file_path (str): The file path to convert.
@@ -32,7 +33,17 @@ class URLHelper:
             file_path = os.path.join(settings.MEDIA_ROOT, file_path)
 
         relative_path = os.path.normpath(os.path.relpath(file_path, settings.MEDIA_ROOT))
-        return f"{os.environ.get("HOST_URL")}{settings.MEDIA_URL}{relative_path.replace(os.sep, '/')}"
+
+        # Get HOST_URL from settings (with fallback)
+        host_url = getattr(settings, "HOST_URL", os.getenv("HOST_URL", "http://localhost:8000/"))
+
+        # Ensure HOST_URL ends with a slash
+        if not host_url.endswith("/"):
+            host_url += "/"
+
+        # Combine HOST_URL with MEDIA_URL and the relative path
+        media_url = settings.MEDIA_URL.lstrip("/")  # Remove leading slash if present
+        return f"{host_url}{media_url}{relative_path.replace(os.sep, '/')}"
 
 
 class FileController:
@@ -153,7 +164,7 @@ class VTONRequestHelper:
 
         Args:
             vton_request: VTONRequest instance
-            request: Django request object for building absolute URI (optional)
+            request: Django request object for building absolute URI (optional, deprecated)
 
         Returns:
             Full public URL string or None
@@ -161,11 +172,8 @@ class VTONRequestHelper:
         if not vton_request.person_image:
             return None
 
-        relative_url = f"{settings.MEDIA_URL}{vton_request.person_image.name}"
-
-        if request:
-            return request.build_absolute_uri(relative_url)
-        return relative_url
+        file_path = os.path.join(settings.MEDIA_ROOT, vton_request.person_image.name)
+        return URLHelper.convert_to_public_url(file_path)
 
     @staticmethod
     def get_clothing_image_url(vton_request, request=None):
@@ -174,7 +182,7 @@ class VTONRequestHelper:
 
         Args:
             vton_request: VTONRequest instance
-            request: Django request object for building absolute URI (optional)
+            request: Django request object for building absolute URI (optional, deprecated)
 
         Returns:
             Full public URL string or None
@@ -182,11 +190,8 @@ class VTONRequestHelper:
         if not vton_request.clothing_image:
             return None
 
-        relative_url = f"{settings.MEDIA_URL}{vton_request.clothing_image.name}"
-
-        if request:
-            return request.build_absolute_uri(relative_url)
-        return relative_url
+        file_path = os.path.join(settings.MEDIA_ROOT, vton_request.clothing_image.name)
+        return URLHelper.convert_to_public_url(file_path)
 
     @staticmethod
     def get_result_image_url(vton_request, request=None):
@@ -195,7 +200,7 @@ class VTONRequestHelper:
 
         Args:
             vton_request: VTONRequest instance
-            request: Django request object for building absolute URI (optional)
+            request: Django request object for building absolute URI (optional, deprecated)
 
         Returns:
             Full public URL string or None
@@ -203,11 +208,8 @@ class VTONRequestHelper:
         if not vton_request.result_image:
             return None
 
-        relative_url = f"{settings.MEDIA_URL}{vton_request.result_image.name}"
-
-        if request:
-            return request.build_absolute_uri(relative_url)
-        return relative_url
+        file_path = os.path.join(settings.MEDIA_ROOT, vton_request.result_image.name)
+        return URLHelper.convert_to_public_url(file_path)
 
     @staticmethod
     def get_all_urls(vton_request, request=None):
