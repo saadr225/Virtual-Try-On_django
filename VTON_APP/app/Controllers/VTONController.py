@@ -109,9 +109,44 @@ class VTONController:
                 config=GenerateContentConfig(system_instruction=[system_prompt]),
             )
 
-            # Extract generated image
+            # Debug logging
+            print("=" * 80)
+            print("API RESPONSE DEBUG:")
+            print(f"Response type: {type(response)}")
+            print(f"Has candidates: {hasattr(response, 'candidates')}")
+
+            if hasattr(response, "candidates"):
+                print(f"Number of candidates: {len(response.candidates) if response.candidates else 0}")
+
+                for idx, candidate in enumerate(response.candidates):
+                    print(f"\nCandidate {idx}:")
+                    print(f"  - Has content: {hasattr(candidate, 'content')}")
+                    print(f"  - Content is None: {candidate.content is None if hasattr(candidate, 'content') else 'N/A'}")
+
+                    if hasattr(candidate, "finish_reason"):
+                        print(f"  - Finish reason: {candidate.finish_reason}")
+
+                    if hasattr(candidate, "safety_ratings"):
+                        print(f"  - Safety ratings: {candidate.safety_ratings}")
+
+                    if hasattr(candidate, "content") and candidate.content:
+                        print(f"  - Content has parts: {hasattr(candidate.content, 'parts')}")
+                        if hasattr(candidate.content, "parts"):
+                            print(f"  - Number of parts: {len(candidate.content.parts) if candidate.content.parts else 0}")
+
+            print("=" * 80)
+
+            # Extract generated image with better error handling
             generated_image = None
             for candidate in response.candidates:
+                # Skip if content is None
+                if not candidate.content:
+                    continue
+
+                # Skip if parts don't exist
+                if not hasattr(candidate.content, "parts") or not candidate.content.parts:
+                    continue
+
                 for part in candidate.content.parts:
                     if hasattr(part, "inline_data") and part.inline_data:
                         image_data = part.inline_data.data
@@ -121,7 +156,20 @@ class VTONController:
                     break
 
             if not generated_image:
-                raise Exception("No image generated from API response")
+                # Provide detailed error information
+                error_details = []
+
+                if not hasattr(response, "candidates") or not response.candidates:
+                    error_details.append("No candidates in API response")
+                else:
+                    for candidate in response.candidates:
+                        if hasattr(candidate, "finish_reason"):
+                            error_details.append(f"Finish reason: {candidate.finish_reason}")
+                        if hasattr(candidate, "safety_ratings"):
+                            error_details.append(f"Safety: {candidate.safety_ratings}")
+
+                error_msg = "API blocked or returned no image. " + " | ".join(error_details) if error_details else "No image in API response"
+                raise Exception(error_msg)
 
             return generated_image
 
