@@ -1,7 +1,7 @@
 from PIL import Image
 from io import BytesIO
 from google import genai
-from google.genai.types import GenerateContentConfig
+from google.genai.types import GenerateContentConfig, HarmCategory, HarmBlockThreshold, SafetySetting  # Add SafetySetting import
 import socket
 import requests
 
@@ -102,11 +102,20 @@ class VTONController:
                 final_prompt += "\nAlso, " + instructions.strip()
                 # final_prompt += instructions.strip()
 
-            # Call Gemini API
+            # Call Gemini API with safety settings (corrected format)
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[final_prompt, person_image, clothing_image],
-                config=GenerateContentConfig(system_instruction=[system_prompt]),
+                config=GenerateContentConfig(
+                    system_instruction=[system_prompt],  # This is already correct as a list
+                    safety_settings=[  # Change from dict to list of SafetySetting objects
+                        SafetySetting(category=HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=HarmBlockThreshold.BLOCK_NONE),
+                        SafetySetting(category=HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=HarmBlockThreshold.BLOCK_NONE),
+                        SafetySetting(category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=HarmBlockThreshold.BLOCK_ONLY_HIGH),
+                        SafetySetting(category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=HarmBlockThreshold.BLOCK_NONE),
+                    ],
+                    temperature=0.7,
+                ),
             )
 
             # Extract generated image
