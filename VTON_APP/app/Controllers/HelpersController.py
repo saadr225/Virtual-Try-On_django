@@ -32,7 +32,7 @@ class URLHelper:
             file_path = os.path.join(settings.MEDIA_ROOT, file_path)
 
         relative_path = os.path.normpath(os.path.relpath(file_path, settings.MEDIA_ROOT))
-        return f"{settings.HOST_URL}{settings.MEDIA_URL}{relative_path.replace(os.sep, '/')}"
+        return f"{os.environ.get("HOST_URL")}{settings.MEDIA_URL}{relative_path.replace(os.sep, '/')}"
 
 
 class FileController:
