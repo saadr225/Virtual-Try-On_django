@@ -25,8 +25,8 @@ RUN pip install --upgrade pip && \
 COPY VTON_APP/ ./VTON_APP/
 COPY .env.example .env.example
 
-# Create media directories
-RUN mkdir -p VTON_APP/media/uploads VTON_APP/media/output VTON_APP/media/temp
+# # Create media directories
+# RUN mkdir -p VTON_APP/media/uploads VTON_APP/media/output VTON_APP/media/temp
 
 # Expose port
 EXPOSE 8080
