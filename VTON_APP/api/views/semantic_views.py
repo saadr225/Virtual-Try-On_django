@@ -12,6 +12,7 @@ from PIL import Image
 from django.utils import timezone
 import os
 import logging
+import time
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ vton_controller = VTONController(os.getenv("GOOGLE_GENAI_API_KEY"))
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def virtual_tryon(request):
+    start_time = time.time()
+
     """
     Handle virtual try-on requests by processing uploaded images and generating the output.
 
@@ -69,6 +72,9 @@ def virtual_tryon(request):
 
         logger.info(f"Created VTON request: {vton_request.request_id}")
 
+        save_time = time.time()
+        logger.info(f"Image save took: {save_time - start_time:.2f}s")
+
     except Exception as e:
         logger.error(f"Error saving uploaded images: {str(e)}")
         return Response({"error": f"Failed to save uploaded images: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -92,11 +98,17 @@ def virtual_tryon(request):
         vton_request.status = "processing"
         vton_request.save()
 
+        processing_start = time.time()
+        logger.info(f"Setup took: {processing_start - save_time:.2f}s")
+
         # Log which processing flow is being used
         flow_type = "cloth-on-model" if cloths_on else "garment-only"
         logger.info(f"Processing VTON request: {vton_request.request_id} with flow type: {flow_type}")
 
         output_image = vton_controller.generate_virtual_tryon(person_image, clothing_image, instructions, cloths_on)
+
+        processing_end = time.time()
+        logger.info(f"VTON API call took: {processing_end - processing_start:.2f}s")
 
         # Save result image with unique filename
         logger.info(f"Saving result image for request: {vton_request.request_id}")
@@ -112,6 +124,9 @@ def virtual_tryon(request):
 
         # Serialize and return response with public URLs
         response_serializer = VTONResponseSerializer(vton_request, context={"request": request})
+
+        total_time = time.time() - start_time
+        logger.info(f"Total request time: {total_time:.2f}s")
 
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 

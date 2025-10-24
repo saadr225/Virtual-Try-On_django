@@ -4,6 +4,8 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Add production optimization
+ENV PYTHONOPTIMIZE=1
 
 # Set work directory
 WORKDIR /app
@@ -17,9 +19,10 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies with production optimizations
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install gunicorn  # Add production server
 
 # Copy project files
 COPY VTON_APP/ ./VTON_APP/
