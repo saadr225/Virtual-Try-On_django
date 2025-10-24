@@ -4,6 +4,9 @@ from google import genai
 from google.genai.types import GenerateContentConfig
 import socket
 import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class VTONController:
@@ -89,29 +92,81 @@ class VTONController:
             # Select appropriate prompts based on cloths_on flag
             if cloths_on:
                 # Clothing image shows someone wearing the garment
-                system_prompt = self.system_prompt_cloths_on_model
-                default_prompt = self.default_prompt_cloths_on_model
+                # System instruction should be plain text, not JSON
+                system_prompt = """You are an expert virtual try-on AI. You will be given two images: a 'target model image' and a 'reference image showing someone wearing a garment'. Your task is to create a new photorealistic image where the person from the 'target model image' is wearing the EXACT SAME clothing that the person in the 'reference image' is wearing.
+
+Rules:
+1. Extract the Garment: First, identify and extract the clothing/garment being worn by the person in the 'reference image'. Pay close attention to the garment's design, pattern, color, texture, and style details.
+2. Complete Garment Replacement: You MUST completely REMOVE and REPLACE all the clothing items worn by the person in the 'target model image' with the extracted garment from the reference image. No part of the original clothing should be visible in the final image.
+3. Preserve the Target Model: The person's face, hair, body shape, and pose from the 'target model image' MUST remain unchanged.
+4. Preserve the Background: The entire background from the 'target model image' MUST be preserved perfectly.
+5. Apply the Extracted Garment: Realistically fit the extracted garment onto the target person. It should adapt to their pose with natural folds, shadows, and lighting consistent with the target model's scene. The garment's design, pattern, color, and dimensions should remain identical to what was worn in the reference image.
+
+Output: Return ONLY the final, edited image. Do not include any text."""
+
+                default_prompt = "Generate a realistic image of the person from the first image wearing the exact same clothing that the person in the second image is wearing. Extract the garment from the reference image and apply it to the target person. Ensure the clothing fits naturally on the target person's body, maintaining their original pose, background, and lighting. Do not alter the target person's face, hair, or other features. The clothing should be identical to what is worn in the reference image (same design, pattern, color, and dimensions)."
             else:
                 # Clothing image shows just the garment
-                system_prompt = self.system_prompt_garment_only
-                default_prompt = self.default_prompt_garment_only
+                system_prompt = """You are an expert virtual try-on AI. You will be given a 'model image' and a 'garment image'. Your task is to create a new photorealistic image where the person from the 'model image' is wearing the clothing from the 'garment image'.
+
+Rules:
+1. Complete Garment Replacement: You MUST completely REMOVE and REPLACE all the clothing items worn by the person in the 'model image' with the new garment (or garments if there is a two or more than two piece suit in the source image). No part of the original clothing (e.g., collars, sleeves, patterns) should be visible in the final image. The new garment should not be similar to the previous garment the person was wearing. It shouldn't imitate the style of the previous garment. The new garment should look entirely like the person has changed clothes and is wearing the new garment.
+2. Preserve the Model: The person's face, hair, body shape, and pose from the 'model image' MUST remain unchanged.
+3. Preserve the Background: The entire background from the 'model image' MUST be preserved perfectly.
+4. Apply the Garment: Realistically fit the new garment onto the person. It should adapt to their pose with natural folds, shadows, and lighting consistent with the original scene. The applied garment's design and dimensions should not change and should remain the same as in the source image.
+
+Output: Return ONLY the final, edited image. Do not include any text."""
+
+                default_prompt = "Generate a realistic image of the person from the first image wearing the clothing from the second image. Ensure the clothing fits naturally on the person's body, maintaining the original pose, background, and lighting as much as possible. Do not alter the person's face, hair, or other features. Also do not alter the clothing in any way (design, dimensions etc.). The clothing should also be the same as in the source image."
 
             # Construct final prompt
             final_prompt = default_prompt
             if instructions and instructions.strip():
                 final_prompt += "\nAlso, " + instructions.strip()
-                # final_prompt += instructions.strip()
+
+            # Log the request details
+            logger.info(f"Processing VTON request with cloths_on={cloths_on}")
+            logger.info(f"Prompt length: {len(final_prompt)}")
 
             # Call Gemini API
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=[final_prompt, person_image, clothing_image],
-                config=GenerateContentConfig(system_instruction=[system_prompt]),
+                config=GenerateContentConfig(
+                    system_instruction=system_prompt,  # Changed from list to string
+                    temperature=0.4,
+                    top_p=0.95,
+                    top_k=40,
+                ),
             )
+
+            # Log response details
+            logger.info(f"Response received. Candidates: {len(response.candidates) if response.candidates else 0}")
+
+            # Check if response has candidates
+            if not response.candidates or len(response.candidates) == 0:
+                # Log the full response for debugging
+                logger.error(f"No candidates in response. Response: {response}")
+
+                # Check for safety ratings
+                if hasattr(response, "prompt_feedback"):
+                    logger.error(f"Prompt feedback: {response.prompt_feedback}")
+                    if hasattr(response.prompt_feedback, "block_reason"):
+                        raise Exception(f"Request blocked by safety filters: {response.prompt_feedback.block_reason}")
+
+                raise Exception("No image generated from API response. The request may have been blocked by safety filters or size limits.")
 
             # Extract generated image
             generated_image = None
             for candidate in response.candidates:
+                if not hasattr(candidate, "content") or candidate.content is None:
+                    logger.warning(f"Candidate has no content: {candidate}")
+                    continue
+
+                if not hasattr(candidate.content, "parts") or candidate.content.parts is None:
+                    logger.warning(f"Candidate content has no parts: {candidate.content}")
+                    continue
+
                 for part in candidate.content.parts:
                     if hasattr(part, "inline_data") and part.inline_data:
                         image_data = part.inline_data.data
@@ -121,7 +176,7 @@ class VTONController:
                     break
 
             if not generated_image:
-                raise Exception("No image generated from API response")
+                raise Exception("No image data found in API response")
 
             return generated_image
 
