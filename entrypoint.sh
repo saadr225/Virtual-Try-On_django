@@ -6,7 +6,7 @@ python manage.py collectstatic --noinput
 # Create cache table if using database cache
 python manage.py createcachetable
 
-python manage.py runserver
+python manage.py runserver 0.0.0.0:8080
 # Optimized for 2 vCPU with proper worker/thread balance
 # For I/O-bound workloads (API calls to Vertex AI):
 # - Fewer workers to reduce memory overhead
