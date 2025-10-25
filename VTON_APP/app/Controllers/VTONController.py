@@ -34,8 +34,8 @@ class VTONController:
         self.model_name = "virtual-try-on-preview-08-04"
 
         # Set up Vertex AI environment variables
-        os.environ["GOOGLE_CLOUD_PROJECT"] = "gen-lang-client-0870725395"
-        os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
+        # os.environ["GOOGLE_CLOUD_PROJECT"] = "gen-lang-client-0870725395"
+        # os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
 
         # Initialize the GenAI client
