@@ -73,17 +73,6 @@ WSGI_APPLICATION = "VTON_APP.wsgi.application"
 
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-# Deprecated DB
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": BASE_DIR / "db.sqlite3",
-#     }
-# }
-
-# Cloud DB
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -92,12 +81,21 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", "your_password"),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", "5432"),
-        "CONN_MAX_AGE": 60,  # Reuse DB connections
+        "CONN_MAX_AGE": 60,
         "OPTIONS": {
             "connect_timeout": 10,
         },
+        # Add these critical settings:
+        "ATOMIC_REQUESTS": True,  # Wrap each request in transaction
+        "CONN_HEALTH_CHECKS": True,  # Django 4.1+ - check connection health
     }
 }
+
+# Add database connection pooling settings
+DATABASES["default"]["OPTIONS"]["keepalives"] = 1
+DATABASES["default"]["OPTIONS"]["keepalives_idle"] = 30
+DATABASES["default"]["OPTIONS"]["keepalives_interval"] = 10
+DATABASES["default"]["OPTIONS"]["keepalives_count"] = 5
 
 REST_FRAMEWORK = {
     # Use Django's standard `django.contrib.auth` permissions,
@@ -180,3 +178,78 @@ APPEND_SLASH = True
 
 # For requests to Vertex AI
 REQUESTS_TIMEOUT = 120  # seconds
+
+# Add these critical production settings at the end:
+
+# Security settings for production
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = not DEBUG
+
+# Session settings
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_SAVE_EVERY_REQUEST = False  # Don't save on every request
+
+# File upload settings (critical for VTON)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Logging configuration
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": "django.log",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "api": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+# Middleware optimization - add this after MIDDLEWARE definition
+MIDDLEWARE_CLASSES = MIDDLEWARE  # For compatibility
+
+# Add caching (critical for performance)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "cache_table",
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,
+            "CULL_FREQUENCY": 3,
+        },
+    }
+}
