@@ -8,6 +8,7 @@ from app.Controllers.HelpersController import FileController
 from app.Controllers.VTONController import VTONController
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.views.decorators.csrf import csrf_exempt
 from PIL import Image
 from django.utils import timezone
 from django.conf import settings  # Add this import
@@ -25,6 +26,7 @@ vton_controller = VTONController(os.getenv("VERTEX_AI_API_KEY"))
 # Create your views here.
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@csrf_exempt
 def virtual_tryon(request):
     start_time = time.time()
 
