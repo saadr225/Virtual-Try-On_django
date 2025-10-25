@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from PIL import Image
 from django.utils import timezone
+from django.conf import settings  # Add this import
 import os
 import logging
 import time
@@ -17,7 +18,8 @@ import time
 # Setup logging
 logger = logging.getLogger(__name__)
 
-vton_controller = VTONController(os.getenv("GOOGLE_GENAI_API_KEY"))
+
+vton_controller = VTONController(os.getenv("VERTEX_AI_API_KEY"))
 
 
 # Create your views here.
@@ -44,6 +46,8 @@ def virtual_tryon(request):
     person_image_file = vton_serializer.validated_data.get("person_image")
     clothing_image_file = vton_serializer.validated_data.get("clothing_image")
     instructions = vton_serializer.validated_data.get("instructions", "")
+    # DEPRECATED: cloths_on is no longer used by Vertex AI API
+    # Kept for backward compatibility
     cloths_on = vton_serializer.validated_data.get("cloths_on", False)
 
     # Validate required files
@@ -79,19 +83,6 @@ def virtual_tryon(request):
         logger.error(f"Error saving uploaded images: {str(e)}")
         return Response({"error": f"Failed to save uploaded images: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # Convert uploaded files to PIL Images for processing
-    try:
-        person_image_file.seek(0)  # Reset file pointer
-        clothing_image_file.seek(0)
-        person_image = Image.open(person_image_file)
-        clothing_image = Image.open(clothing_image_file)
-    except Exception as e:
-        vton_request.status = "failed"
-        vton_request.error_message = f"Invalid image format: {str(e)}"
-        vton_request.save()
-        logger.error(f"Invalid image format for request {vton_request.request_id}: {str(e)}")
-        return Response({"error": f"Invalid image format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-
     # Process the images and generate the virtual try-on result
     try:
         # Update status to processing
@@ -101,11 +92,23 @@ def virtual_tryon(request):
         processing_start = time.time()
         logger.info(f"Setup took: {processing_start - save_time:.2f}s")
 
-        # Log which processing flow is being used
-        flow_type = "cloth-on-model" if cloths_on else "garment-only"
-        logger.info(f"Processing VTON request: {vton_request.request_id} with flow type: {flow_type}")
+        # DEPRECATED: Log warning if cloths_on is set to True
+        # The Vertex AI API handles both scenarios automatically
+        if cloths_on:
+            logger.warning(
+                f"Request {vton_request.request_id}: cloths_on parameter is deprecated. " "Vertex AI Virtual Try-On API automatically handles both scenarios."
+            )
 
-        output_image = vton_controller.generate_virtual_tryon(person_image, clothing_image, instructions, cloths_on)
+        # Convert relative paths to absolute paths for the API
+        person_image_absolute_path = os.path.join(settings.MEDIA_ROOT, person_image_path)
+        clothing_image_absolute_path = os.path.join(settings.MEDIA_ROOT, clothing_image_path)
+
+        logger.info(f"Processing with absolute paths:")
+        logger.info(f"  Person: {person_image_absolute_path}")
+        logger.info(f"  Clothing: {clothing_image_absolute_path}")
+
+        # Call the VTON controller with absolute paths
+        output_image = vton_controller.generate_virtual_tryon(person_image_absolute_path, clothing_image_absolute_path, instructions, cloths_on)
 
         processing_end = time.time()
         logger.info(f"VTON API call took: {processing_end - processing_start:.2f}s")

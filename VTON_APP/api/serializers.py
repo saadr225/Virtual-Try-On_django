@@ -7,7 +7,11 @@ class VTONSerializer(serializers.Serializer):
     person_image = serializers.FileField()
     clothing_image = serializers.FileField()
     instructions = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    cloths_on = serializers.BooleanField(required=False, default=False)
+    # DEPRECATED: cloths_on is no longer used by Vertex AI Virtual Try-On API
+    # Kept for backward compatibility with existing API clients
+    cloths_on = serializers.BooleanField(
+        required=False, default=False, help_text="DEPRECATED: This field is no longer used. Vertex AI automatically handles both scenarios."
+    )
 
 
 class VTONResponseSerializer(serializers.ModelSerializer):

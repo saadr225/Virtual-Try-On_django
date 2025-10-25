@@ -35,7 +35,10 @@ class VTONRequest(models.Model):
 
     # Request metadata
     instructions = models.TextField(blank=True, default="")
-    cloths_on = models.BooleanField(default=False, help_text="Indicates if the clothing image shows someone wearing the garment")
+    # DEPRECATED: cloths_on field is no longer used by Vertex AI Virtual Try-On API
+    # The API automatically handles both garment-only and cloths-on scenarios
+    # Kept for backward compatibility with existing database records
+    cloths_on = models.BooleanField(default=False, help_text="DEPRECATED: This field is no longer used. Vertex AI automatically handles both scenarios.")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True, default="")
 
