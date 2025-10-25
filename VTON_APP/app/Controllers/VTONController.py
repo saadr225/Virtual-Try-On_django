@@ -83,8 +83,6 @@ class VTONController:
                     "The API uses its own optimized prompting internally."
                 )
 
-    
-
             logger.info(f"Processing VTON request using {self.model_name}")
 
             # Call Vertex AI Virtual Try-On API
@@ -120,7 +118,7 @@ class VTONController:
             error_str = str(e).lower()
 
             if "api key" in error_str or "authentication" in error_str or "unauthorized" in error_str:
-                raise Exception("API authentication error: Invalid or missing API key. " "Please check your GOOGLE_GENAI_API_KEY configuration.")
+                raise Exception("API authentication error: Invalid or missing API key. " "Please check your VERTEX_AI_API_KEY configuration.")
             elif "quota" in error_str or "rate limit" in error_str:
                 raise Exception("API quota exceeded: You have reached your API usage limit. " "Please check your Google Cloud quota and billing settings.")
             elif "safety" in error_str or "blocked" in error_str:
@@ -135,7 +133,6 @@ class VTONController:
                 logger.error(f"Virtual try-on generation failed: {str(e)}")
                 raise Exception(f"Virtual try-on generation failed: {str(e)}")
 
-    
     def save_result(self, image, output_path):
         """
         Save generated image to file

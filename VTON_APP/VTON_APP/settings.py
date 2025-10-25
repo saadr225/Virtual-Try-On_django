@@ -92,6 +92,10 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", "your_password"),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", "5432"),
+        "CONN_MAX_AGE": 60,  # Reuse DB connections
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
     }
 }
 
@@ -173,3 +177,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Stop Django from adding a trailing slash to URLs
 APPEND_SLASH = True
+
+# For requests to Vertex AI
+REQUESTS_TIMEOUT = 120  # seconds
