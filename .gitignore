@@ -5,3 +5,5 @@ media/
 .env
 migrations/
 *.pyc
+
+django.log
