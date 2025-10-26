@@ -42,7 +42,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "app.utils.middleware.RequestLoggingMiddleware",  
+    "app.utils.middleware.RequestLoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -85,7 +85,10 @@ CSRF_TRUSTED_ORIGINS = [
     os.environ.get("FRONTEND_URL"),
     os.environ.get("FRONTEND_URL_WWW"),
 ]
-
+if os.environ.get("DEBUG"):
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^null$",
+    ]
 ROOT_URLCONF = "VTON_APP.urls"
 
 TEMPLATES = [
