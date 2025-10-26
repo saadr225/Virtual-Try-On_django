@@ -42,7 +42,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Add this as second middleware
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -52,7 +52,7 @@ MIDDLEWARE = [
 ]
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     "DELETE",
@@ -72,6 +72,16 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    os.environ.get("FRONTEND_URL"),
+    os.environ.get("FRONTEND_URL_WWW"),
+]
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    os.environ.get("FRONTEND_URL"),
+    os.environ.get("FRONTEND_URL_WWW"),
 ]
 
 ROOT_URLCONF = "VTON_APP.urls"
@@ -202,7 +212,12 @@ APPEND_SLASH = True
 # For requests to Vertex AI
 REQUESTS_TIMEOUT = 120  # seconds
 
-# Add these critical production settings at the end:
+# Cookie settings for cross-site requests
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = True
+
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = True
 
 # Security settings for production
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
