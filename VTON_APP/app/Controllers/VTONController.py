@@ -130,8 +130,16 @@ class VTONController:
             elif "network" in error_str or "connection" in error_str:
                 raise Exception("Network connection error: Unable to reach Vertex AI API. " "Please check your internet connection and try again.")
             else:
-                logger.error(f"Virtual try-on generation failed: {str(e)}")
-                raise Exception(f"Virtual try-on generation failed: {str(e)}")
+                # Check for PIL image identification errors (often due to safety blocks or invalid API responses)
+                if "cannot identify image file" in str(e).lower():
+                    logger.warning(f"Image identification failed - likely due to safety filters or invalid API response. Error: {str(e)}")
+                    raise Exception(
+                        "Unable to process the provided images. This may be due to content restrictions or image quality issues. "
+                        "Please try using different images that comply with usage guidelines."
+                    )
+                else:
+                    logger.error(f"Virtual try-on generation failed: {str(e)}")
+                    raise Exception(f"Virtual try-on generation failed: {str(e)}")
 
     def save_result(self, image, output_path):
         """
