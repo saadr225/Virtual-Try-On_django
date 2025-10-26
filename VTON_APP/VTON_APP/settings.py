@@ -54,7 +54,7 @@ MIDDLEWARE = [
 ]
 
 # CORS settings
-# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     "DELETE",
@@ -89,6 +89,7 @@ if os.environ.get("DEBUG"):
     CORS_ALLOWED_ORIGIN_REGEXES = [
         r"^null$",
     ]
+
 ROOT_URLCONF = "VTON_APP.urls"
 
 TEMPLATES = [
