@@ -213,7 +213,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Stop Django from adding a trailing slash to URLs
-APPEND_SLASH = True
+APPEND_SLASH = False
 
 # For requests to Vertex AI
 REQUESTS_TIMEOUT = 120  # seconds
