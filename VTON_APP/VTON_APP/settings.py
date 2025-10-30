@@ -45,6 +45,7 @@ MIDDLEWARE = [
     "app.utils.middleware.RequestLoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Add WhiteNoise right after SecurityMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -206,6 +207,19 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 # Media files (uploaded files(images, videos, etc))
 MEDIA_URL = "media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# WhiteNoise configuration for efficient static and media file serving
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG  # Only auto-refresh in development
+WHITENOISE_MAX_AGE = 31536000 if not DEBUG else 0  # 1 year cache in production
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
