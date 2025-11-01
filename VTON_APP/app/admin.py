@@ -4,9 +4,6 @@ from .models import (
     UserData,
     APIKey,
     Store,
-    ProductCategory,
-    Product,
-    ProductImage,
     VTONRequestEnhanced,
     SubscriptionPlan,
     Subscription,
@@ -68,39 +65,6 @@ class StoreAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ProductCategory)
-class ProductCategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "parent", "order", "is_active", "created_at"]
-    list_filter = ["is_active", "created_at"]
-    search_fields = ["name", "description"]
-    prepopulated_fields = {"slug": ("name",)}
-    ordering = ["order", "name"]
-
-
-class ProductImageInline(admin.TabularInline):
-    model = ProductImage
-    extra = 1
-    fields = ["image", "alt_text", "order", "is_active"]
-
-
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ["name", "store", "category", "price", "currency", "is_active", "is_featured", "created_at"]
-    list_filter = ["is_active", "is_featured", "category", "created_at"]
-    search_fields = ["name", "sku", "description", "store__store_name"]
-    readonly_fields = ["product_id", "created_at", "updated_at"]
-    inlines = [ProductImageInline]
-
-    fieldsets = (
-        ("Product Information", {"fields": ("product_id", "store", "name", "sku", "description", "category")}),
-        ("Media", {"fields": ("primary_image",)}),
-        ("Pricing", {"fields": ("price", "currency")}),
-        ("Status & Features", {"fields": ("is_active", "is_featured")}),
-        ("Metadata", {"fields": ("tags", "metadata"), "classes": ("collapse",)}),
-        ("Timestamps", {"fields": ("created_at", "updated_at")}),
-    )
-
-
 @admin.register(VTONRequestEnhanced)
 class VTONRequestEnhancedAdmin(admin.ModelAdmin):
     list_display = ["request_id", "user", "store", "status", "source", "created_at", "processing_duration_seconds"]
@@ -110,7 +74,7 @@ class VTONRequestEnhancedAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
 
     fieldsets = (
-        ("Request Information", {"fields": ("request_id", "user", "store", "product", "api_key", "source")}),
+        ("Request Information", {"fields": ("request_id", "user", "store", "api_key", "source")}),
         ("Request Metadata", {"fields": ("ip_address", "user_agent", "referer")}),
         (
             "Images",
