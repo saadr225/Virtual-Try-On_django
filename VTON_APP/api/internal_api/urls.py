@@ -1,12 +1,16 @@
-from django.urls import path
-from api.internal_api.views import semantic_views
+from django.urls import path, include
+from .views import auth_views
 
 app_name = "internal_api"
 
-# from rest_framework_simplejwt.views import TokenRefreshView
 urlpatterns = [
-    # virtual tryon views
-    path("virtual-tryon/process/", semantic_views.virtual_tryon, name="virtual-tryon"),  # Process try-on request
-    path("virtual-tryon/<uuid:request_id>/status/", semantic_views.get_request_status, name="vton-request-status"),  # Get status of a specific request
-    path("virtual-tryon/requests/", semantic_views.list_recent_requests, name="vton-list-requests"),  # List recent requests
+    # Authentication endpoints
+    path("auth/register/", auth_views.register, name="register"),  # User registration
+    path("auth/login/", auth_views.login_view, name="login"),  # User login
+    path("auth/logout/", auth_views.logout_view, name="logout"),  # User logout
+    path("auth/csrf/", auth_views.get_csrf_token, name="csrf-token"),  # Get CSRF token
+    path("auth/me/", auth_views.user_info, name="user-info"),  # Get current user info
+    path("auth/profile/", auth_views.update_profile, name="update-profile"),  # User profile
+    path("auth/change-password/", auth_views.change_password, name="change-password"),  # Password management
+    path("auth/delete-account/", auth_views.delete_account, name="delete-account"),  # Account deletion
 ]

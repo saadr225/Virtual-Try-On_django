@@ -2,6 +2,8 @@
 Response Code System
 -------------------
 This file defines all response codes used throughout the application.
+These codes are standardized for use in all API responses and serve as documentation
+for the API contract.
 
 NAMING CONVENTION:
 - Each code consists of a 3-letter prefix followed by a 3-digit number (e.g., SUC001)
@@ -10,236 +12,267 @@ NAMING CONVENTION:
 
 PREFIX MEANINGS:
 SUC - Success codes
-AUT - Authentication-related codes
+AUT - Authentication and authorization related codes
 USR - User account management codes
+VTN - VTON request processing codes
+STR - Store management codes
+SUB - Subscription and billing codes
 FIL - File and media processing codes
-SUB - Submission and history management codes (currently using HIS prefix)
-TXT - AI text analysis codes
-IMG - Image analysis and face recognition codes (currently using FCE prefix)
-SYS - General system codes
-USE - User submission specific codes
-FRM - Forum and community-related codes
-KNB - Knowledge base related codes
+API - API management and integration codes
+AUD - Audit and logging codes
+SYS - General system and validation codes
 
-Notes:
-- For consistency, some prefixes should be updated (HIS→SUB, FCE→IMG, USE→IMG)
-- The 3-digit numbering starts at 001 within each category
+MODELS MANAGED:
+- UserData: User profiles with roles (customer, store owner, admin)
+- APIKey: API keys for store owners
+- Store: Store management for store owners
+- VTONRequest: Virtual try-on requests with full lifecycle tracking
+- SubscriptionPlan: Available subscription tiers
+- Subscription: User subscriptions to plans
+- Invoice: Billing and payment invoices
+- APIUsageLog: Detailed API usage tracking
+- DailyUsageStats: Aggregated usage statistics
+- AuditLog: System-wide audit trails
+- SystemConfiguration: Configuration management
 """
 
 # Success Codes
 SUCCESS_CODES = {
-    "SUCCESS": {"code": "SUC001", "message": "Success"},
-    "LOGIN_SUCCESS": {"code": "SUC002", "message": "Login successful."},
-    "LOGOUT_SUCCESS": {"code": "SUC003", "message": "Logout successful."},
-    "PASSWORD_CHANGE_SUCCESS": {"code": "SUC004", "message": "Password changed successfully."},
-    "EMAIL_CHANGE_SUCCESS": {"code": "SUC005", "message": "Email changed successfully."},
+    "SUCCESS": {"code": "SUC001", "message": "Request processed successfully."},
+    "DATA_RETRIEVED": {"code": "SUC002", "message": "Data retrieved successfully."},
+    "RESOURCE_CREATED": {"code": "SUC003", "message": "Resource created successfully."},
+    "RESOURCE_UPDATED": {"code": "SUC004", "message": "Resource updated successfully."},
+    "RESOURCE_DELETED": {"code": "SUC005", "message": "Resource deleted successfully."},
+    "LOGIN_SUCCESS": {"code": "SUC006", "message": "Login successful."},
+    "LOGOUT_SUCCESS": {"code": "SUC007", "message": "Logout successful."},
+    "EMAIL_VERIFIED": {"code": "SUC008", "message": "Email verified successfully."},
+    "PASSWORD_RESET_SENT": {"code": "SUC009", "message": "Password reset email sent successfully."},
+    "PASSWORD_RESET_SUCCESS": {"code": "SUC010", "message": "Password reset successfully."},
 }
 
-# Authentication Error Codes
+# Authentication and Authorization Error Codes
 AUTH_ERROR_CODES = {
     "TOKEN_INVALID_OR_EXPIRED": {"code": "AUT001", "message": "Invalid or expired token."},
-    "LOGIN_REQUIRED": {"code": "AUT002", "message": "Login required."},
-    "INVALID_CREDENTIALS": {"code": "AUT003", "message": "Invalid credentials."},
-    "ACCESS_DENIED": {
-        "code": "AUT004",
-        "message": "You don't have permission to access this resource.",
-    },
+    "LOGIN_REQUIRED": {"code": "AUT002", "message": "Authentication required. Please login."},
+    "INVALID_CREDENTIALS": {"code": "AUT003", "message": "Invalid email or password."},
+    "ACCESS_DENIED": {"code": "AUT004", "message": "You don't have permission to access this resource."},
+    "INSUFFICIENT_PERMISSIONS": {"code": "AUT005", "message": "Insufficient permissions for this action."},
+    "ACCOUNT_SUSPENDED": {"code": "AUT006", "message": "Your account has been suspended."},
+    "SESSION_EXPIRED": {"code": "AUT007", "message": "Your session has expired. Please login again."},
+    "UNAUTHORIZED": {"code": "AUT008", "message": "Unauthorized access."},
+    "FORBIDDEN": {"code": "AUT009", "message": "You do not have permission to perform this action."},
+    "ROLE_REQUIRED": {"code": "AUT010", "message": "Specific role required for this action."},
+    "TWO_FACTOR_REQUIRED": {"code": "AUT011", "message": "Two-factor authentication required."},
+    "INVALID_OTP": {"code": "AUT012", "message": "Invalid or expired OTP."},
 }
 
-# User and Account Error Codes
+# User Account Management Error Codes
 USER_ACCOUNT_ERROR_CODES = {
     "USER_NOT_FOUND": {"code": "USR001", "message": "User not found."},
-    "OLD_PASSWORD_INCORRECT": {"code": "USR002", "message": "Old password is not correct."},
+    "USER_CREATION_ERROR": {"code": "USR002", "message": "Error creating user account."},
     "PASSWORD_CHANGE_ERROR": {"code": "USR003", "message": "Error changing password."},
-    "EMAIL_CHANGE_ERROR": {"code": "USR004", "message": "Error changing email."},
-    "USER_CREATION_ERROR": {"code": "USR005", "message": "Error creating user."},
-    "EMAIL_REQUIRED": {"code": "USR006", "message": "Email is required."},
-    "USERNAME_REQUIRED": {"code": "USR007", "message": "Username is required."},
-    "NEW_PASSWORD_REQUIRED": {"code": "USR008", "message": "New password is required."},
-    "RESET_TOKEN_NOT_FOUND": {"code": "USR009", "message": "Reset token not found."},
-    "EMAIL_ALREADY_IN_USE": {"code": "USR010", "message": "This email is already in use."},
-    "USER_WITH_EMAIL_NOT_FOUND": {"code": "USR011", "message": "User with this email does not exist."},
-    "FORGOT_PASSWORD_ERROR": {"code": "USR012", "message": "Error sending forgot password email."},
-    "PASSWORDS_DONT_MATCH": {"code": "USR013", "message": "Passwords do not match."},
-    "USER_DATA_NOT_FOUND": {"code": "USR014", "message": "User data not found."},
+    "OLD_PASSWORD_INCORRECT": {"code": "USR004", "message": "Current password is incorrect."},
+    "EMAIL_CHANGE_ERROR": {"code": "USR005", "message": "Error changing email address."},
+    "EMAIL_ALREADY_IN_USE": {"code": "USR006", "message": "This email is already registered."},
+    "EMAIL_REQUIRED": {"code": "USR007", "message": "Email address is required."},
+    "USERNAME_REQUIRED": {"code": "USR008", "message": "Username is required."},
+    "PASSWORD_REQUIRED": {"code": "USR009", "message": "Password is required."},
+    "PASSWORDS_DONT_MATCH": {"code": "USR010", "message": "Passwords do not match."},
+    "USER_DATA_NOT_FOUND": {"code": "USR011", "message": "User profile data not found."},
+    "USER_VERIFICATION_REQUIRED": {"code": "USR012", "message": "Please verify your email before proceeding."},
+    "USER_NOT_VERIFIED": {"code": "USR013", "message": "User account is not verified."},
+    "INVALID_USER_TYPE": {"code": "USR014", "message": "Invalid user type specified."},
+    "USER_ACCOUNT_INACTIVE": {"code": "USR015", "message": "User account is inactive."},
+    "USER_SUSPENDED": {"code": "USR016", "message": "User account has been suspended."},
+    "SUSPENSION_REASON_PROVIDED": {"code": "USR017", "message": "Account suspended."},
+    "PREMIUM_EXPIRED": {"code": "USR018", "message": "Premium membership has expired."},
+    "INVALID_PHONE_NUMBER": {"code": "USR019", "message": "Invalid phone number format."},
+    "PROFILE_UPDATE_ERROR": {"code": "USR020", "message": "Error updating user profile."},
+    "ADDRESS_UPDATE_ERROR": {"code": "USR021", "message": "Error updating address information."},
+}
+
+# VTON Request Processing Error Codes
+VTON_ERROR_CODES = {
+    # Status-based errors
+    "VTON_REQUEST_NOT_FOUND": {"code": "VTN001", "message": "VTON request not found."},
+    "VTON_REQUEST_PENDING": {"code": "VTN002", "message": "VTON request is still pending."},
+    "VTON_REQUEST_QUEUED": {"code": "VTN003", "message": "VTON request is queued for processing."},
+    "VTON_REQUEST_PROCESSING": {"code": "VTN004", "message": "VTON request is currently being processed."},
+    "VTON_REQUEST_COMPLETED": {"code": "VTN005", "message": "VTON request completed successfully."},
+    "VTON_REQUEST_FAILED": {"code": "VTN006", "message": "VTON processing failed."},
+    "VTON_REQUEST_CANCELLED": {"code": "VTN007", "message": "VTON request was cancelled."},
+    "VTON_REQUEST_TIMEOUT": {"code": "VTN008", "message": "VTON processing timed out."},
+    # Processing errors
+    "VTON_PROCESSING_ERROR": {"code": "VTN009", "message": "Error during VTON processing."},
+    "VTON_INVALID_REQUEST": {"code": "VTN010", "message": "Invalid VTON request parameters."},
+    "NO_PERSON_DETECTED": {"code": "VTN011", "message": "No person detected in the image."},
+    "INVALID_PERSON_IMAGE": {"code": "VTN012", "message": "Person image is invalid or corrupted."},
+    "INVALID_CLOTHING_IMAGE": {"code": "VTN013", "message": "Clothing image is invalid or corrupted."},
+    # Result errors
+    "VTON_RESULT_NOT_READY": {"code": "VTN014", "message": "VTON result is not yet ready."},
+    "VTON_RESULT_NOT_FOUND": {"code": "VTN015", "message": "VTON result file not found."},
+    "VTON_RESULT_CORRUPTED": {"code": "VTN016", "message": "VTON result is corrupted."},
+    # Request lifecycle
+    "VTON_CANNOT_CANCEL": {"code": "VTN017", "message": "Cannot cancel request in current state."},
+    "VTON_SOURCE_INVALID": {"code": "VTN018", "message": "Invalid request source."},
+    "VTON_QUALITY_CHECK_FAILED": {"code": "VTN019", "message": "Result quality check failed."},
 }
 
 # File and Media Processing Error Codes
 FILE_MEDIA_ERROR_CODES = {
     "FILE_UPLOAD_ERROR": {"code": "FIL001", "message": "Error uploading file."},
-    "MEDIA_PROCESSING_ERROR": {"code": "FIL002", "message": "Error processing media file."},
-    "FILE_IDENTIFIER_REQUIRED": {"code": "FIL003", "message": "File identifier is required."},
-    "METADATA_ANALYSIS_ERROR": {"code": "FIL004", "message": "Error analyzing metadata."},
-    "DELETE_ERROR": {"code": "FIL005", "message": "Error deleting submission."},
-    "UNSUPPORTED_FILE_TYPE": {"code": "FIL006", "message": "This file type is not supported."},
+    "FILE_DOWNLOAD_ERROR": {"code": "FIL002", "message": "Error downloading file."},
+    "FILE_NOT_FOUND": {"code": "FIL003", "message": "File not found."},
+    "FILE_IDENTIFIER_REQUIRED": {"code": "FIL004", "message": "File identifier is required."},
+    "UNSUPPORTED_FILE_TYPE": {"code": "FIL005", "message": "This file type is not supported."},
+    "FILE_SIZE_EXCEEDED": {"code": "FIL006", "message": "File size exceeds maximum allowed size."},
+    "FILE_CORRUPTED": {"code": "FIL007", "message": "File is corrupted or invalid."},
+    "FILE_DELETE_ERROR": {"code": "FIL008", "message": "Error deleting file."},
+    "MEDIA_PROCESSING_ERROR": {"code": "FIL009", "message": "Error processing media file."},
+    "FILE_WRITE_ERROR": {"code": "FIL010", "message": "Error writing file to storage."},
+    "FILE_READ_ERROR": {"code": "FIL011", "message": "Error reading file from storage."},
+    "STORAGE_QUOTA_EXCEEDED": {"code": "FIL012", "message": "Storage quota exceeded."},
+    "INVALID_FILE_NAME": {"code": "FIL013", "message": "Invalid file name format."},
+    "FILE_EXTENSION_NOT_ALLOWED": {"code": "FIL014", "message": "File extension not allowed."},
+    "FILE_TEMPORARILY_UNAVAILABLE": {"code": "FIL015", "message": "File is temporarily unavailable."},
 }
 
-# History and Submission Error Codes
-HISTORY_ERROR_CODES = {
-    "HISTORY_FETCH_ERROR": {"code": "HIS001", "message": "Error fetching submission history."},
-    "HISTORY_DELETE_ERROR": {"code": "HIS002", "message": "Error deleting submission history."},
-    "SUBMISSION_FETCH_ERROR": {"code": "HIS003", "message": "Error fetching submission details."},
-    "SUBMISSION_NOT_FOUND": {"code": "HIS004", "message": "The specified submission was not found."},
-    "INVALID_SUBMISSION": {"code": "HIS005", "message": "The submission is invalid or incomplete."},
-    "DUPLICATE_SUBMISSION": {"code": "HIS006", "message": "This content has already been submitted."},
+# Store Management Error Codes
+STORE_ERROR_CODES = {
+    # Basic operations
+    "STORE_NOT_FOUND": {"code": "STR001", "message": "Store not found."},
+    "STORE_CREATION_ERROR": {"code": "STR002", "message": "Error creating store."},
+    "STORE_UPDATE_ERROR": {"code": "STR003", "message": "Error updating store."},
+    "STORE_DELETE_ERROR": {"code": "STR004", "message": "Error deleting store."},
+    # Status-based errors
+    "STORE_SUSPENDED": {"code": "STR005", "message": "This store has been suspended."},
+    "STORE_CLOSED": {"code": "STR006", "message": "This store has been closed."},
+    "STORE_PENDING_APPROVAL": {"code": "STR007", "message": "Store is pending approval."},
+    "STORE_NOT_VERIFIED": {"code": "STR008", "message": "Store is not verified."},
+    # Operational errors
+    "INVALID_STORE_STATUS": {"code": "STR009", "message": "Invalid store status."},
+    "STORE_LIMIT_EXCEEDED": {"code": "STR010", "message": "You have reached the maximum number of stores for your plan."},
+    "STORE_NAME_REQUIRED": {"code": "STR011", "message": "Store name is required."},
+    "STORE_EMAIL_REQUIRED": {"code": "STR012", "message": "Store email is required."},
+    "STORE_EMAIL_INVALID": {"code": "STR013", "message": "Invalid store email format."},
+    "STORE_PHONE_INVALID": {"code": "STR014", "message": "Invalid store phone number."},
+    "STORE_URL_INVALID": {"code": "STR015", "message": "Invalid store website URL."},
+    "STORE_SETTINGS_UPDATE_ERROR": {"code": "STR016", "message": "Error updating store settings."},
 }
 
-# General Error Codes
+# Subscription and Billing Error Codes
+SUBSCRIPTION_ERROR_CODES = {
+    # Subscription basic operations
+    "SUBSCRIPTION_NOT_FOUND": {"code": "SUB001", "message": "Subscription not found."},
+    "SUBSCRIPTION_CREATION_ERROR": {"code": "SUB002", "message": "Error creating subscription."},
+    "SUBSCRIPTION_CANCELLATION_ERROR": {"code": "SUB003", "message": "Error cancelling subscription."},
+    "SUBSCRIPTION_UPDATE_ERROR": {"code": "SUB004", "message": "Error updating subscription."},
+    # Plan errors
+    "PLAN_NOT_FOUND": {"code": "SUB005", "message": "Subscription plan not found."},
+    "INVALID_PLAN": {"code": "SUB006", "message": "Invalid subscription plan."},
+    "PLAN_INACTIVE": {"code": "SUB007", "message": "Selected plan is inactive."},
+    # Subscription status errors
+    "SUBSCRIPTION_ACTIVE": {"code": "SUB008", "message": "Subscription is already active."},
+    "SUBSCRIPTION_EXPIRED": {"code": "SUB009", "message": "Subscription has expired."},
+    "SUBSCRIPTION_INACTIVE": {"code": "SUB010", "message": "Subscription is not active."},
+    "SUBSCRIPTION_CANCELLED": {"code": "SUB011", "message": "Subscription has been cancelled."},
+    "SUBSCRIPTION_PAST_DUE": {"code": "SUB012", "message": "Subscription payment is past due."},
+    "SUBSCRIPTION_SUSPENDED": {"code": "SUB013", "message": "Subscription has been suspended."},
+    # Quota and limits
+    "QUOTA_EXCEEDED": {"code": "SUB014", "message": "You have exceeded your subscription quota."},
+    "REQUEST_LIMIT_EXCEEDED": {"code": "SUB015", "message": "Monthly request limit exceeded."},
+    "API_KEY_LIMIT_EXCEEDED": {"code": "SUB016", "message": "API key limit exceeded for your plan."},
+    "STORE_LIMIT_EXCEEDED": {"code": "SUB017", "message": "Store limit exceeded for your plan."},
+    # Billing and payment
+    "INVOICE_NOT_FOUND": {"code": "SUB018", "message": "Invoice not found."},
+    "INVOICE_CREATION_ERROR": {"code": "SUB019", "message": "Error creating invoice."},
+    "PAYMENT_FAILED": {"code": "SUB020", "message": "Payment processing failed."},
+    "PAYMENT_PENDING": {"code": "SUB021", "message": "Payment is pending."},
+    "PAYMENT_REFUNDED": {"code": "SUB022", "message": "Payment has been refunded."},
+    "REFUND_ERROR": {"code": "SUB023", "message": "Error processing refund."},
+    # Billing cycle
+    "BILLING_CYCLE_INVALID": {"code": "SUB024", "message": "Invalid billing cycle."},
+    "RENEWAL_FAILED": {"code": "SUB025", "message": "Subscription renewal failed."},
+    "CANNOT_CANCEL_TRIAL": {"code": "SUB026", "message": "Cannot cancel trial subscription."},
+}
+
+# General System and Validation Error Codes
 GENERAL_ERROR_CODES = {
+    # Request validation
     "INVALID_REQUEST": {"code": "SYS001", "message": "Invalid request parameters."},
-    "SERVER_ERROR": {"code": "SYS002", "message": "An unexpected server error occurred."},
-    "NOT_FOUND": {"code": "SYS003", "message": "The requested resource was not found."},
-    "INVALID_CATEGORY": {"code": "SYS004", "message": "Invalid category selected."},
+    "INVALID_DATA_FORMAT": {"code": "SYS002", "message": "Invalid data format."},
+    "MISSING_REQUIRED_FIELD": {"code": "SYS003", "message": "Required field is missing."},
+    "VALIDATION_ERROR": {"code": "SYS004", "message": "Validation error."},
+    # Resource errors
+    "NOT_FOUND": {"code": "SYS005", "message": "The requested resource was not found."},
+    "RESOURCE_ALREADY_EXISTS": {"code": "SYS006", "message": "Resource already exists."},
+    # HTTP errors
+    "METHOD_NOT_ALLOWED": {"code": "SYS007", "message": "HTTP method not allowed for this resource."},
+    "BAD_REQUEST": {"code": "SYS008", "message": "Bad request."},
+    "CONFLICT": {"code": "SYS009", "message": "Resource conflict detected."},
+    # Server errors
+    "SERVER_ERROR": {"code": "SYS010", "message": "An unexpected server error occurred."},
+    "DATABASE_ERROR": {"code": "SYS011", "message": "Database operation failed."},
+    "SERVICE_UNAVAILABLE": {"code": "SYS012", "message": "Service is temporarily unavailable."},
+    # Operational errors
+    "TIMEOUT": {"code": "SYS013", "message": "Request timed out."},
+    "RATE_LIMIT_EXCEEDED": {"code": "SYS014", "message": "Rate limit exceeded."},
+    # Pagination and filtering
+    "INVALID_PAGE": {"code": "SYS015", "message": "Invalid page number."},
+    "INVALID_PAGE_SIZE": {"code": "SYS016", "message": "Invalid page size."},
+    "INVALID_SORT_FIELD": {"code": "SYS017", "message": "Invalid sort field."},
 }
 
-# User Submission Specific Error Codes
-USER_SUBMISSION_ERROR_CODES = {
-    "MEDIA_CONTAINS_NO_FACES": {"code": "USE001", "message": "Media file contains no faces."},
-    "FILE_NOT_FOUND": {"code": "USE007", "message": "File not found."},
+# API Key Management Error Codes
+APIKEY_ERROR_CODES = {
+    # Basic operations
+    "API_KEY_NOT_FOUND": {"code": "API001", "message": "API key not found."},
+    "API_KEY_INVALID": {"code": "API002", "message": "Invalid API key provided."},
+    "API_KEY_EXPIRED": {"code": "API003", "message": "API key has expired."},
+    "API_KEY_SUSPENDED": {"code": "API004", "message": "API key has been suspended."},
+    "API_KEY_INACTIVE": {"code": "API005", "message": "API key is inactive."},
+    # CRUD operations
+    "API_KEY_CREATE_ERROR": {"code": "API006", "message": "Error creating API key."},
+    "API_KEY_DELETE_ERROR": {"code": "API007", "message": "Error deleting API key."},
+    "API_KEY_UPDATE_ERROR": {"code": "API008", "message": "Error updating API key."},
+    "API_KEY_FETCH_ERROR": {"code": "API009", "message": "Error fetching API key details."},
+    # Request validation
+    "API_KEY_MISSING": {"code": "API010", "message": "API key is missing from request headers."},
+    "API_KEY_NAME_REQUIRED": {"code": "API011", "message": "API key name is required."},
+    "API_KEY_NAME_DUPLICATE": {"code": "API012", "message": "API key name already exists."},
+    # Rate limiting
+    "API_RATE_LIMIT_EXCEEDED": {"code": "API013", "message": "API rate limit exceeded."},
+    "API_RATE_LIMIT_PER_MINUTE": {"code": "API014", "message": "Per-minute rate limit exceeded."},
+    "API_RATE_LIMIT_PER_HOUR": {"code": "API015", "message": "Per-hour rate limit exceeded."},
+    "API_RATE_LIMIT_PER_DAY": {"code": "API016", "message": "Per-day rate limit exceeded."},
+    # Quotas
+    "API_MONTHLY_QUOTA_EXCEEDED": {"code": "API017", "message": "Monthly API quota exceeded."},
+    "API_QUOTA_RESET_PENDING": {"code": "API018", "message": "Quota will reset on the next billing cycle."},
+    # Permissions and access
+    "API_PERMISSION_DENIED": {"code": "API019", "message": "API key doesn't have permission for this operation."},
+    "API_KEY_LIMIT_REACHED": {"code": "API020", "message": "Maximum API key limit reached for your plan."},
+    "API_DOMAIN_NOT_WHITELISTED": {"code": "API021", "message": "Domain not whitelisted for this API key."},
+    "API_IP_NOT_WHITELISTED": {"code": "API022", "message": "IP address not whitelisted for this API key."},
 }
 
-# AI Text Analysis Error Codes
-AI_TEXT_ERROR_CODES = {
-    "TEXT_MISSING": {"code": "TXT001", "message": "No text provided for analysis."},
-    "TEXT_PROCESSING_ERROR": {"code": "TXT002", "message": "Error processing text for AI analysis."},
-    "TEXT_TOO_SHORT": {
-        "code": "TXT003",
-        "message": "Provided text is too short for reliable analysis.",
-    },
-    "HIGHLIGHT_MISSING": {"code": "TXT004", "message": "No highlight parameter provided."},
+# Audit and Logging Error Codes
+AUDIT_ERROR_CODES = {
+    "AUDIT_LOG_NOT_FOUND": {"code": "AUD001", "message": "Audit log not found."},
+    "AUDIT_LOG_FETCH_ERROR": {"code": "AUD002", "message": "Error fetching audit logs."},
+    "AUDIT_LOG_CREATE_ERROR": {"code": "AUD003", "message": "Error creating audit log."},
+    "SYSTEM_CONFIG_NOT_FOUND": {"code": "AUD004", "message": "System configuration not found."},
+    "SYSTEM_CONFIG_UPDATE_ERROR": {"code": "AUD005", "message": "Error updating system configuration."},
+    "SENSITIVE_DATA_ACCESS_BLOCKED": {"code": "AUD006", "message": "Access to sensitive data blocked."},
 }
 
-# Face Watch Error Codes
-FACE_WATCH_ERROR_CODES = {
-    "FACE_REGISTRATION_ERROR": {"code": "FCE002", "message": "Error registering face."},
-    "FACE_DETECTION_ERROR": {"code": "FCE003", "message": "Error detecting face in image."},
-    "FACE_REMOVAL_ERROR": {"code": "FCE004", "message": "Error removing face from watch list."},
-    "FACE_NOT_FOUND": {"code": "FCE005", "message": "Face not found in watch list."},
-    "MULTIPLE_FACES_DETECTED": {"code": "FCE006", "message": "Multiple faces detected in the image."},
-    "FACE_ALREADY_REGISTERED": {
-        "code": "FCE007",
-        "status": "error",
-        "message": "Face already registered by another user",
-    },
-    # Add to ResponseCodesController.py
-    "FACE_ALREADY_REGISTERED_BY_USER": {
-        "code": "FCE008",
-        "status": "error",
-        "message": "Face already registered by this user",
-    },
-    "FACE_SEARCH_ERROR": {"code": "FCE009", "message": "Error searching for faces in PDA."},
-}
-
-# Forum Success Codes
-FORUM_SUCCESS_CODES = {
-    "FORUM_THREAD_CREATED": {"code": "FRM101", "message": "Forum thread created successfully."},
-    "FORUM_THREAD_APPROVED": {"code": "FRM102", "message": "Thread has been approved."},
-    "FORUM_THREAD_REJECTED": {"code": "FRM103", "message": "Thread has been rejected."},
-    "FORUM_REPLY_CREATED": {"code": "FRM104", "message": "Reply added successfully."},
-    "FORUM_THREAD_UPDATED": {"code": "FRM105", "message": "Thread updated successfully."},
-    "FORUM_THREAD_DELETED": {"code": "FRM106", "message": "Thread deleted successfully."},
-    "FORUM_REPLY_UPDATED": {"code": "FRM107", "message": "Reply updated successfully."},
-    "FORUM_REPLY_DELETED": {"code": "FRM108", "message": "Reply deleted successfully."},
-    "FORUM_THREADS_FETCHED": {"code": "FRM109", "message": "Threads fetched successfully."},
-    "FORUM_THREAD_FETCHED": {"code": "FRM110", "message": "Thread details fetched successfully."},
-    "FORUM_TOPICS_FETCHED": {"code": "FRM111", "message": "Topics fetched successfully."},
-    "FORUM_TAGS_FETCHED": {"code": "FRM112", "message": "Tags fetched successfully."},
-    "FORUM_SEARCH_RESULTS": {"code": "FRM113", "message": "Search results fetched successfully."},
-    "FORUM_LIKE_ADDED": {"code": "FRM114", "message": "Like added successfully."},
-    "FORUM_LIKE_REMOVED": {"code": "FRM115", "message": "Like removed successfully."},
-    "FORUM_DISLIKE_ADDED": {"code": "FRM116", "message": "Dislike added successfully."},
-    "FORUM_DISLIKE_REMOVED": {"code": "FRM117", "message": "Dislike removed successfully."},
-    "FORUM_REACTION_ADDED": {"code": "FRM118", "message": "Reaction added successfully."},
-    "FORUM_REACTION_REMOVED": {"code": "FRM119", "message": "Reaction removed successfully."},
-    "FORUM_REPLIES_FETCHED": {"code": "FRM120", "message": "Thread replies fetched successfully."},
-}
-
-# Forum Error Codes
-FORUM_ERROR_CODES = {
-    "FORUM_MISSING_FIELDS": {"code": "FRM001", "message": "Missing required forum fields."},
-    "FORUM_TOPIC_NOT_FOUND": {"code": "FRM002", "message": "Forum topic not found."},
-    "FORUM_THREAD_NOT_FOUND": {"code": "FRM003", "message": "Thread not found or not approved."},
-    "FORUM_THREAD_DELETED": {"code": "FRM004", "message": "Thread has been deleted."},
-    "FORUM_THREAD_NOT_APPROVED": {"code": "FRM005", "message": "Thread is not approved."},
-    "FORUM_PERMISSION_DENIED": {
-        "code": "FRM006",
-        "message": "Permission denied for this forum action.",
-    },
-    "FORUM_MISSING_CONTENT": {"code": "FRM007", "message": "Forum content is required."},
-    "FORUM_REPLY_NOT_FOUND": {"code": "FRM008", "message": "Reply not found."},
-    "FORUM_INVALID_LIKE_TARGET": {
-        "code": "FRM009",
-        "message": "Must provide either thread_id or reply_id, not both.",
-    },
-    "FORUM_INVALID_LIKE_TYPE": {
-        "code": "FRM010",
-        "message": "Invalid like type. Must be 'like' or 'dislike'.",
-    },
-    "FORUM_CREATE_ERROR": {"code": "FRM011", "message": "Error creating forum thread."},
-    "FORUM_MODERATE_ERROR": {"code": "FRM012", "message": "Error moderating forum thread."},
-    "FORUM_REPLY_ERROR": {"code": "FRM013", "message": "Error adding reply."},
-    "FORUM_LIKE_ERROR": {"code": "FRM014", "message": "Error toggling like status."},
-    "FORUM_THREAD_EDIT_ERROR": {"code": "FRM015", "message": "Error editing thread."},
-    "FORUM_THREAD_DELETE_ERROR": {"code": "FRM016", "message": "Error deleting thread."},
-    "FORUM_REPLY_EDIT_ERROR": {"code": "FRM017", "message": "Error editing reply."},
-    "FORUM_REPLY_DELETE_ERROR": {"code": "FRM018", "message": "Error deleting reply."},
-    "FORUM_THREAD_FETCH_ERROR": {"code": "FRM019", "message": "Error fetching threads."},
-    "FORUM_THREAD_DETAIL_ERROR": {"code": "FRM020", "message": "Error fetching thread detail."},
-    "FORUM_TOPICS_ERROR": {"code": "FRM021", "message": "Error fetching topics."},
-    "FORUM_TAGS_ERROR": {"code": "FRM022", "message": "Error fetching tags."},
-    "FORUM_SEARCH_ERROR": {"code": "FRM023", "message": "Error searching threads."},
-    "FORUM_SEARCH_TOO_SHORT": {
-        "code": "FRM024",
-        "message": "Search query must be at least 3 characters.",
-    },
-    "FORUM_INVALID_PARENT": {
-        "code": "FRM025",
-        "message": "Parent reply does not belong to this thread.",
-    },
-    "FORUM_INVALID_STATUS": {"code": "FRM026", "message": "Invalid approval status."},
-    "FORUM_REACTION_ERROR": {"code": "FRM027", "message": "Error toggling reaction."},
-    "FORUM_INVALID_REACTION_TARGET": {
-        "code": "FRM028",
-        "message": "Must provide either thread_id or reply_id for reaction.",
-    },
-    "FORUM_INVALID_REACTION_TYPE": {"code": "FRM029", "message": "Invalid reaction type."},
-    "FORUM_REPLIES_ERROR": {"code": "FRM030", "message": "Error fetching thread replies."},
-}
-
-# Knowledge Base Success Codes
-KNOWLEDGE_BASE_SUCCESS_CODES = {
-    "KNOWLEDGE_ARTICLE_CREATED": {"code": "KNB101", "message": "Knowledge base article created successfully."},
-    "KNOWLEDGE_ARTICLE_UPDATED": {"code": "KNB102", "message": "Knowledge base article updated successfully."},
-    "KNOWLEDGE_ARTICLE_DELETED": {"code": "KNB103", "message": "Knowledge base article deleted successfully."},
-    "KNOWLEDGE_ARTICLES_FETCHED": {"code": "KNB104", "message": "Knowledge base articles fetched successfully."},
-    "KNOWLEDGE_ARTICLE_FETCHED": {"code": "KNB105", "message": "Knowledge base article fetched successfully."},
-    "KNOWLEDGE_TOPICS_FETCHED": {"code": "KNB106", "message": "Knowledge base topics fetched successfully."},
-    "KNOWLEDGE_SHARE_LINKS_GENERATED": {"code": "KNB107", "message": "Knowledge base share links generated successfully."},
-    "KNOWLEDGE_TOPIC_CREATED": {"code": "KNB108", "message": "Knowledge base topic created successfully."},
-    "KNOWLEDGE_TOPIC_UPDATED": {"code": "KNB109", "message": "Knowledge base topic updated successfully."},
-    "KNOWLEDGE_TOPIC_DELETED": {"code": "KNB110", "message": "Knowledge base topic deleted successfully."},
-}
-
-# Knowledge Base Error Codes
-KNOWLEDGE_BASE_ERROR_CODES = {
-    "KNOWLEDGE_VALIDATION_ERROR": {"code": "KNB001", "message": "Validation error in knowledge base operation."},
-    "KNOWLEDGE_ARTICLE_NOT_FOUND": {"code": "KNB002", "message": "Knowledge base article not found."},
-    "KNOWLEDGE_TOPIC_NOT_FOUND": {"code": "KNB003", "message": "Knowledge base topic not found."},
-    "KNOWLEDGE_AUTHOR_NOT_FOUND": {"code": "KNB004", "message": "Knowledge base author not found."},
-    "KNOWLEDGE_SEARCH_TOO_SHORT": {"code": "KNB005", "message": "Search query must be at least 3 characters."},
-    "KNOWLEDGE_FETCH_ERROR": {"code": "KNB006", "message": "Error fetching knowledge base articles."},
-    "KNOWLEDGE_DETAIL_ERROR": {"code": "KNB007", "message": "Error fetching knowledge base article details."},
-    "KNOWLEDGE_CREATE_ERROR": {"code": "KNB008", "message": "Error creating knowledge base article."},
-    "KNOWLEDGE_UPDATE_ERROR": {"code": "KNB009", "message": "Error updating knowledge base article."},
-    "KNOWLEDGE_DELETE_ERROR": {"code": "KNB010", "message": "Error deleting knowledge base article."},
-    "KNOWLEDGE_TOPICS_ERROR": {"code": "KNB011", "message": "Error fetching knowledge base topics."},
-    "KNOWLEDGE_SHARE_ERROR": {"code": "KNB012", "message": "Error generating knowledge base share links."},
-    "KNOWLEDGE_TOPIC_NAME_REQUIRED": {"code": "KNB013", "message": "Knowledge base topic name is required."},
-    "KNOWLEDGE_TOPIC_CREATE_ERROR": {"code": "KNB014", "message": "Error creating knowledge base topic."},
-    "KNOWLEDGE_TOPIC_UPDATE_ERROR": {"code": "KNB015", "message": "Error updating knowledge base topic."},
-    "KNOWLEDGE_TOPIC_DELETE_ERROR": {"code": "KNB016", "message": "Error deleting knowledge base topic."},
-    "KNOWLEDGE_PERMISSION_DENIED": {"code": "KNB017", "message": "Permission denied for knowledge base operation."},
-    "KNOWLEDGE_USER_DATA_NOT_FOUND": {"code": "KNB018", "message": "User data not found for knowledge base operation."},
+# Analytics and Usage Error Codes
+ANALYTICS_ERROR_CODES = {
+    "USAGE_LOG_NOT_FOUND": {"code": "ANA001", "message": "Usage log not found."},
+    "USAGE_STATS_NOT_FOUND": {"code": "ANA002", "message": "Usage statistics not found."},
+    "USAGE_STATS_FETCH_ERROR": {"code": "ANA003", "message": "Error fetching usage statistics."},
+    "USAGE_STATS_GENERATE_ERROR": {"code": "ANA004", "message": "Error generating usage statistics."},
+    "INVALID_DATE_RANGE": {"code": "ANA005", "message": "Invalid date range specified."},
+    "DATE_RANGE_REQUIRED": {"code": "ANA006", "message": "Date range is required."},
 }
 
 # API Success Codes
@@ -248,21 +281,29 @@ API_SUCCESS_CODES = {
     "API_KEY_DELETED": {"code": "API102", "message": "API key deleted successfully."},
     "API_KEY_FETCHED": {"code": "API103", "message": "API key details fetched successfully."},
     "API_KEYS_FETCHED": {"code": "API104", "message": "API keys fetched successfully."},
+    "API_KEY_UPDATED": {"code": "API105", "message": "API key updated successfully."},
+    "API_KEY_REGENERATED": {"code": "API106", "message": "API key regenerated successfully."},
+    "VTON_REQUEST_SUBMITTED": {"code": "API107", "message": "VTON request submitted successfully."},
+    "VTON_REQUEST_QUEUED": {"code": "API108", "message": "VTON request queued successfully."},
+    "VTON_RESULT_FETCHED": {"code": "API109", "message": "VTON result fetched successfully."},
+    "VTON_REQUESTS_FETCHED": {"code": "API110", "message": "VTON requests fetched successfully."},
+    "VTON_STATUS_FETCHED": {"code": "API111", "message": "VTON status fetched successfully."},
+    "USAGE_STATS_FETCHED": {"code": "API112", "message": "Usage statistics fetched successfully."},
+    "LIST_FETCHED": {"code": "API113", "message": "List fetched successfully."},
 }
 
 # API Error Codes
 API_ERROR_CODES = {
-    "API_KEY_MISSING": {"code": "API001", "message": "API key is missing from request headers."},
-    "API_KEY_INVALID": {"code": "API002", "message": "Invalid API key provided."},
-    "API_KEY_EXPIRED": {"code": "API003", "message": "API key has expired."},
-    "API_RATE_LIMIT_EXCEEDED": {"code": "API004", "message": "API rate limit exceeded."},
-    "API_PERMISSION_DENIED": {"code": "API005", "message": "API key doesn't have permission for this operation."},
-    "API_VALIDATION_ERROR": {"code": "API006", "message": "Invalid request parameters."},
-    "API_UNSUPPORTED_MEDIA_TYPE": {"code": "API007", "message": "Unsupported media type."},
-    "API_KEY_NOT_FOUND": {"code": "API008", "message": "API key not found."},
-    "API_KEY_CREATE_ERROR": {"code": "API009", "message": "Error creating API key."},
-    "API_KEY_DELETE_ERROR": {"code": "API010", "message": "Error deleting API key."},
-    "API_TEXT_TOO_SHORT": {"code": "API011", "message": "Text too short for analysis."},
+    "API_VALIDATION_ERROR": {"code": "API200", "message": "Invalid request parameters."},
+    "API_UNSUPPORTED_MEDIA_TYPE": {"code": "API201", "message": "Unsupported media type."},
+    "API_INTERNAL_ERROR": {"code": "API202", "message": "Internal API error occurred."},
+    "API_SERVICE_UNAVAILABLE": {"code": "API203", "message": "API service is temporarily unavailable."},
+    "API_TIMEOUT": {"code": "API204", "message": "API request timed out."},
+    "API_PAYLOAD_TOO_LARGE": {"code": "API205", "message": "Request payload is too large."},
+    "API_MALFORMED_REQUEST": {"code": "API206", "message": "Malformed API request."},
+    "API_ENDPOINT_NOT_FOUND": {"code": "API207", "message": "API endpoint not found."},
+    "API_VERSION_DEPRECATED": {"code": "API208", "message": "API version is deprecated."},
+    "API_MAINTENANCE_MODE": {"code": "API209", "message": "API is in maintenance mode."},
 }
 
 # Combine all response codes into one dictionary for lookup
@@ -270,16 +311,16 @@ RESPONSE_CODES = {
     **SUCCESS_CODES,
     **AUTH_ERROR_CODES,
     **USER_ACCOUNT_ERROR_CODES,
+    **VTON_ERROR_CODES,
     **FILE_MEDIA_ERROR_CODES,
-    **USER_SUBMISSION_ERROR_CODES,
-    **HISTORY_ERROR_CODES,
-    **AI_TEXT_ERROR_CODES,
+    **STORE_ERROR_CODES,
+    **SUBSCRIPTION_ERROR_CODES,
     **GENERAL_ERROR_CODES,
-    **FACE_WATCH_ERROR_CODES,
-    **FORUM_SUCCESS_CODES,
-    **FORUM_ERROR_CODES,
-    **KNOWLEDGE_BASE_SUCCESS_CODES,
-    **KNOWLEDGE_BASE_ERROR_CODES,
+    **APIKEY_ERROR_CODES,
+    **AUDIT_ERROR_CODES,
+    **ANALYTICS_ERROR_CODES,
+    **API_SUCCESS_CODES,
+    **API_ERROR_CODES,
 }
 
 
