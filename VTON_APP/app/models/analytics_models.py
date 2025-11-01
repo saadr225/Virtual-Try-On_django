@@ -13,7 +13,7 @@ class APIUsageLog(models.Model):
     log_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     # Request info
-    api_key = models.ForeignKey(APIKey, on_delete=models.CASCADE, related_name="usage_logs")
+    api_key = models.ForeignKey(APIKey, on_delete=models.CASCADE, null=True, blank=True, related_name="usage_logs")
     vton_request = models.ForeignKey(VTONRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name="usage_logs")
 
     # Endpoint details
