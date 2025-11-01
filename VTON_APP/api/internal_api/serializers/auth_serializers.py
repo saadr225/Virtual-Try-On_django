@@ -61,7 +61,6 @@ class LoginSerializer(serializers.Serializer):
 
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True, style={"input_type": "password"})
-    remember_me = serializers.BooleanField(required=False, default=False)
 
 
 class ChangePasswordSerializer(serializers.Serializer):

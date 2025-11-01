@@ -46,18 +46,16 @@ MIDDLEWARE = [
     "app.utils.middleware.RequestLoggingMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Add WhiteNoise right after SecurityMiddleware
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",  # Keep for Django admin
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",  # Keep for Django admin
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-# CORS settings
-# CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+# CORS settings - Allow credentials for JWT tokens in cookies (if needed)
+CORS_ALLOW_CREDENTIALS = False  # Set to True only if storing JWT in httpOnly cookies
 CORS_ALLOW_METHODS = [
     "DELETE",
     "GET",
@@ -69,12 +67,11 @@ CORS_ALLOW_METHODS = [
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
-    "authorization",
+    "authorization",  # Required for JWT Bearer tokens
     "content-type",
     "dnt",
     "origin",
     "user-agent",
-    "x-csrftoken",
     "x-requested-with",
 ]
 
@@ -82,11 +79,8 @@ CORS_ALLOWED_ORIGINS = [
     os.environ.get("FRONTEND_URL"),
     os.environ.get("FRONTEND_URL_WWW"),
 ]
-CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    os.environ.get("FRONTEND_URL"),
-    os.environ.get("FRONTEND_URL_WWW"),
-]
+
+
 if os.environ.get("DEBUG"):
     CORS_ALLOWED_ORIGIN_REGEXES = [
         r"^null$",
@@ -139,32 +133,65 @@ DATABASES["default"]["OPTIONS"]["keepalives_interval"] = 10
 DATABASES["default"]["OPTIONS"]["keepalives_count"] = 5
 
 REST_FRAMEWORK = {
-    # Use Django's standard `django.contrib.auth` permissions,
-    # or allow read-only access for unauthenticated users.
-    # "DEFAULT_PERMISSION_CLASSES": [
-    #     "rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly"
-    # ]
-    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.DjangoModelPermissions",
-        "rest_framework.permissions.IsAdminUser",
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
+    "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+    },
 }
 
-# Simple JWT settings
+# Simple JWT settings - Enhanced security configuration
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": True,
+    # Token lifetimes
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),  # Shorter lifetime for better security
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),  # 7 days refresh
+    # Token rotation and blacklisting
+    "ROTATE_REFRESH_TOKENS": True,  # Rotate refresh tokens on use
+    "BLACKLIST_AFTER_ROTATION": True,  # Blacklist old tokens after rotation
+    "UPDATE_LAST_LOGIN": True,  # Update user's last_login on token generation
+    # Algorithm and signing
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "VERIFYING_KEY": None,
+    # Token types and claims
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
+    # Token classes
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+    # Security settings
+    "JTI_CLAIM": "jti",  # JWT ID claim for blacklisting
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(minutes=30),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=7),
+    # Token obtain/refresh settings
+    "TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainPairSerializer",
+    "TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSerializer",
+    "TOKEN_VERIFY_SERIALIZER": "rest_framework_simplejwt.serializers.TokenVerifySerializer",
+    "TOKEN_BLACKLIST_SERIALIZER": "rest_framework_simplejwt.serializers.TokenBlacklistSerializer",
 }
 
 # Password validation
@@ -232,13 +259,6 @@ APPEND_SLASH = False
 
 # For requests to Vertex AI
 REQUESTS_TIMEOUT = 120  # seconds
-
-# Cookie settings for cross-site requests
-SESSION_COOKIE_SAMESITE = "None"
-SESSION_COOKIE_SECURE = True
-
-CSRF_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SECURE = True
 
 # Security settings for production
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -4,10 +4,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from api.internal_api.serializers.auth_serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -57,11 +59,12 @@ def create_response(code_key: str, data: dict = None, http_status: int = None):
         else:
             http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
 
-    return Response(response_data, status=http_status)
+    return Response(response_data, status=http_status)  # Changed from http_status=http_status
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@csrf_exempt
 def register(request):
     """
     Register a new user account.
@@ -155,17 +158,21 @@ def register(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-@ensure_csrf_cookie
+@csrf_exempt
 def login_view(request):
     """
-    Authenticate user and create session.
+    Authenticate user and return JWT tokens.
 
     POST /internal/api/auth/login
 
     Request Body:
         - username: string (required)
         - password: string (required)
-        - remember_me: boolean (optional, default: false)
+
+    Response:
+        - user: User data object
+        - access: JWT access token (30 minutes validity)
+        - refresh: JWT refresh token (7 days validity)
 
     Response Codes:
         - SUC006: Login successful
@@ -175,6 +182,13 @@ def login_view(request):
         - USR015: User account is inactive
         - AUT006: Account suspended
         - SYS004: Validation error
+
+    Security Features:
+        - JWT tokens with automatic rotation on refresh
+        - Token blacklisting after logout
+        - Account suspension check
+        - Audit logging
+        - Custom claims (user_type, is_verified, is_premium)
     """
     serializer = LoginSerializer(data=request.data)
 
@@ -191,7 +205,6 @@ def login_view(request):
 
     username = serializer.validated_data["username"]
     password = serializer.validated_data["password"]
-    remember_me = serializer.validated_data.get("remember_me", False)
 
     # Authenticate user
     user = authenticate(request, username=username, password=password)
@@ -199,13 +212,12 @@ def login_view(request):
     if user is not None:
         # Check if account is active
         if not user.is_active:
-            return create_response("USER_ACCOUNT_INACTIVE", status=status.HTTP_403_FORBIDDEN)
+            return create_response("USER_ACCOUNT_INACTIVE", http_status=status.HTTP_403_FORBIDDEN)
 
         # Check if account is suspended
         try:
             user_data = user.userdata
             if user_data.is_suspended:
-                suspension_msg = f"Reason: {user_data.suspension_reason}" if user_data.suspension_reason else ""
                 return create_response(
                     "ACCOUNT_SUSPENDED", {"suspension_reason": user_data.suspension_reason, "suspended_at": user_data.suspended_at}, status.HTTP_403_FORBIDDEN
                 )
@@ -213,14 +225,23 @@ def login_view(request):
             # Create UserData if it doesn't exist
             UserData.objects.create(user=user)
 
-        # Log in the user
-        login(request, user)
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
 
-        # Set session expiry
-        if remember_me:
-            request.session.set_expiry(1209600)  # 2 weeks
-        else:
-            request.session.set_expiry(0)  # Browser close
+        # Add custom claims to JWT
+        refresh["username"] = user.username
+        refresh["email"] = user.email
+        refresh["is_staff"] = user.is_staff
+
+        try:
+            user_data = user.userdata
+            refresh["user_type"] = user_data.user_type
+            refresh["is_verified"] = user_data.is_verified
+            refresh["is_premium"] = user_data.is_premium
+        except UserData.DoesNotExist:
+            refresh["user_type"] = "customer"
+            refresh["is_verified"] = False
+            refresh["is_premium"] = False
 
         # Update last login in UserData
         try:
@@ -243,32 +264,79 @@ def login_view(request):
 
         logger.info(f"User logged in: {user.username}")
 
-        # Return user data
+        # Return user data with JWT tokens
         user_serializer = UserSerializer(user)
 
-        return create_response("LOGIN_SUCCESS", {"user": user_serializer.data}, status.HTTP_200_OK)
+        return create_response(
+            "LOGIN_SUCCESS",
+            {
+                "user": user_serializer.data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status.HTTP_200_OK,
+        )
     else:
-        # Check if user exists but credentials are wrong
+        # Log failed login attempt
         try:
-            User.objects.get(username=username)
-            return create_response("INVALID_CREDENTIALS", status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return create_response("INVALID_CREDENTIALS", status=status.HTTP_401_UNAUTHORIZED)
+            failed_user = User.objects.filter(username=username).first()
+            if failed_user:
+                AuditLog.objects.create(
+                    user=failed_user,
+                    action="login_failed",
+                    resource_type="User",
+                    resource_id=str(failed_user.id),
+                    description=f"Failed login attempt for user {username}",
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                )
+        except Exception as e:
+            logger.error(f"Error logging failed login: {str(e)}")
+
+        return create_response("INVALID_CREDENTIALS", http_status=status.HTTP_401_UNAUTHORIZED)
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def logout_view(request):
     """
-    Logout user and destroy session.
+    Logout user and blacklist JWT refresh token.
 
     POST /internal/api/auth/logout
+
+    Request Body:
+        - refresh: string (required) - JWT refresh token to blacklist
 
     Response Codes:
         - SUC007: Logout successful
         - AUT002: Login required (if not authenticated)
+        - SYS004: Validation error (invalid/expired token)
+
+    Note:
+        - Refresh token will be blacklisted to prevent reuse
+        - Access tokens expire naturally after 30 minutes
+        - Once logged out, user must login again to get new tokens
     """
     user = request.user
+
+    # Get refresh token from request
+    refresh_token = request.data.get("refresh")
+
+    if not refresh_token:
+        return create_response("VALIDATION_ERROR", {"errors": {"refresh": ["Refresh token is required for logout"]}}, status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Blacklist the refresh token
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+        logger.info(f"JWT refresh token blacklisted for user: {user.username}")
+    except TokenError as e:
+        logger.warning(f"Failed to blacklist token during logout: {str(e)}")
+        return create_response("VALIDATION_ERROR", {"detail": "Invalid or expired refresh token"}, status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Error blacklisting token: {str(e)}")
+        return create_response("SYSTEM_ERROR", {"detail": "An error occurred during logout"}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Log logout
     try:
@@ -286,14 +354,99 @@ def logout_view(request):
 
     logger.info(f"User logged out: {user.username}")
 
-    # Logout
-    logout(request)
+    return create_response("LOGOUT_SUCCESS", http_status=status.HTTP_200_OK)  # Changed 'status' to 'http_status'
 
-    return create_response("LOGOUT_SUCCESS", status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def token_refresh_view(request):
+    """
+    Refresh JWT access token using refresh token.
+
+    POST /internal/api/auth/token/refresh
+
+    Request Body:
+        - refresh: string (required) - The refresh token
+
+    Response:
+        - access: New JWT access token
+        - refresh: New refresh token (old one is blacklisted)
+
+    Response Codes:
+        - SUC002: Token refreshed successfully
+        - SYS004: Validation error (invalid/expired token)
+
+    Security Features:
+        - Automatic token rotation (old refresh token is blacklisted)
+        - Token blacklist verification
+        - Prevents use of expired or invalid tokens
+    """
+    refresh_token = request.data.get("refresh")
+
+    if not refresh_token:
+        return create_response("VALIDATION_ERROR", {"errors": {"refresh": ["Refresh token is required"]}}, status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Create RefreshToken instance
+        refresh = RefreshToken(refresh_token)
+
+        # Get user from token
+        user_id = refresh.get("user_id")
+
+        # Generate new access token
+        access_token = str(refresh.access_token)
+
+        # Token rotation: blacklist old token and create new one
+        refresh.blacklist()
+
+        # Create new refresh token
+        new_refresh = RefreshToken.for_user(User.objects.get(id=user_id))
+
+        # Add custom claims to new refresh token
+        try:
+            user = User.objects.get(id=user_id)
+            new_refresh["username"] = user.username
+            new_refresh["email"] = user.email
+            new_refresh["is_staff"] = user.is_staff
+
+            try:
+                user_data = user.userdata
+                new_refresh["user_type"] = user_data.user_type
+                new_refresh["is_verified"] = user_data.is_verified
+                new_refresh["is_premium"] = user_data.is_premium
+            except UserData.DoesNotExist:
+                new_refresh["user_type"] = "customer"
+                new_refresh["is_verified"] = False
+                new_refresh["is_premium"] = False
+        except User.DoesNotExist:
+            pass
+
+        logger.info(f"Token refreshed for user ID: {user_id}")
+
+        return create_response(
+            "DATA_RETRIEVED",
+            {
+                "access": access_token,
+                "refresh": str(new_refresh),
+            },
+            status.HTTP_200_OK,
+        )
+
+    except TokenError as e:
+        logger.error(f"Token refresh error: {str(e)}")
+        return create_response("VALIDATION_ERROR", {"detail": "Invalid or expired refresh token"}, status.HTTP_401_UNAUTHORIZED)
+    except User.DoesNotExist:
+        logger.error(f"User not found during token refresh")
+        return create_response("VALIDATION_ERROR", {"detail": "User not found"}, status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        logger.error(f"Error refreshing token: {str(e)}")
+        return create_response("SYSTEM_ERROR", {"detail": "An error occurred while refreshing token"}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def user_info(request):
     """
     Get current authenticated user information.
@@ -321,6 +474,7 @@ def user_info(request):
 
 @api_view(["PUT", "PATCH"])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def update_profile(request):
     """
     Update user profile information.
@@ -399,6 +553,7 @@ def update_profile(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def change_password(request):
     """
     Change user password.
@@ -445,9 +600,6 @@ def change_password(request):
         user.set_password(serializer.validated_data["new_password"])
         user.save()
 
-        # Update session to prevent logout
-        update_session_auth_hash(request, user)
-
         # Log password change
         AuditLog.objects.create(
             user=user,
@@ -461,30 +613,16 @@ def change_password(request):
 
         logger.info(f"Password changed: {user.username}")
 
-        return create_response("PASSWORD_RESET_SUCCESS", status=status.HTTP_200_OK)
+        return create_response("PASSWORD_RESET_SUCCESS", http_status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.error(f"Password change error: {str(e)}")
         return create_response("PASSWORD_CHANGE_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET"])
-@permission_classes([AllowAny])
-@ensure_csrf_cookie
-def get_csrf_token(request):
-    """
-    Get CSRF token for subsequent requests.
-
-    GET /internal/api/auth/csrf
-
-    Response Codes:
-        - SUC001: Request processed successfully
-    """
-    return create_response("SUCCESS", {"csrf_token_set": True}, status.HTTP_200_OK)
-
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@csrf_exempt
 def delete_account(request):
     """
     Delete user account (soft delete - deactivate).
@@ -548,11 +686,8 @@ def delete_account(request):
 
         logger.info(f"Account deleted: {user.username}")
 
-        # Logout user
-        logout(request)
-
-        return create_response("RESOURCE_DELETED", status=status.HTTP_200_OK)
+        return create_response("RESOURCE_DELETED", http_status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.error(f"Account deletion error: {str(e)}")
-        return create_response("SERVER_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return create_response("SERVER_ERROR", data={"detail": str(e)}, http_status=status.HTTP_500_INTERNAL_SERVER_ERROR)
