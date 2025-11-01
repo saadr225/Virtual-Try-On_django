@@ -1,27 +1,25 @@
 from rest_framework import serializers
-from api.client_api.models import VTONRequest
+from app.models.vton_models import VTONRequest
 from app.Controllers.HelpersController import VTONRequestHelper
 
 
 class VTONSerializer(serializers.Serializer):
+    """Serializer for VTON request input validation."""
+
     person_image = serializers.FileField()
     clothing_image = serializers.FileField()
     instructions = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    # DEPRECATED: cloths_on is no longer used by Vertex AI Virtual Try-On API
-    # Kept for backward compatibility with existing API clients
-    cloths_on = serializers.BooleanField(
-        required=False, default=False, help_text="DEPRECATED: This field is no longer used. Vertex AI automatically handles both scenarios."
-    )
 
 
 class VTONResponseSerializer(serializers.ModelSerializer):
     """
-    Serializer for VTON request response with public URLs
+    Serializer for VTON request response with public URLs and comprehensive metadata.
     """
 
     person_image_url = serializers.SerializerMethodField()
     clothing_image_url = serializers.SerializerMethodField()
     result_image_url = serializers.SerializerMethodField()
+    processing_duration_seconds = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = VTONRequest
@@ -30,13 +28,19 @@ class VTONResponseSerializer(serializers.ModelSerializer):
             "person_image_url",
             "clothing_image_url",
             "result_image_url",
-            "instructions",
-            "cloths_on",
             "status",
             "error_message",
+            "person_image_size",
+            "clothing_image_size",
+            "result_image_size",
+            "processing_duration_seconds",
             "created_at",
             "updated_at",
             "completed_at",
+            "processing_started_at",
+            "processing_completed_at",
+            "source",
+            "metadata",
         ]
 
     def get_person_image_url(self, obj):

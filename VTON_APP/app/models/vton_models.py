@@ -52,8 +52,8 @@ class VTONRequest(models.Model):
     result_image_size = models.IntegerField(null=True, blank=True, help_text="Size in bytes")
 
     # Processing details
-    instructions = models.TextField(blank=True, default="")
-    cloths_on = models.BooleanField(default=False)
+    # instructions = models.TextField(blank=True, default="")
+    # cloths_on = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     error_message = models.TextField(blank=True, default="")
 
@@ -61,10 +61,6 @@ class VTONRequest(models.Model):
     processing_started_at = models.DateTimeField(null=True, blank=True)
     processing_completed_at = models.DateTimeField(null=True, blank=True)
     processing_duration_seconds = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-
-    # Quality metrics (if available from API)
-    quality_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    confidence_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
