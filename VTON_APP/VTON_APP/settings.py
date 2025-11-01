@@ -37,8 +37,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     # User-defined apps
-    "api",
-    "app",
+    "app",  # Core business logic & models
+    "api.client_api",  # External API for third-party integrations
+    "api.internal_api",  # Internal API for frontend
 ]
 
 MIDDLEWARE = [

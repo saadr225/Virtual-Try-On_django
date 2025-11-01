@@ -4,7 +4,7 @@ from .models import (
     UserData,
     APIKey,
     Store,
-    VTONRequestEnhanced,
+    VTONRequest,
     SubscriptionPlan,
     Subscription,
     Invoice,
@@ -51,13 +51,11 @@ class APIKeyAdmin(admin.ModelAdmin):
 class StoreAdmin(admin.ModelAdmin):
     list_display = ["store_name", "owner", "status", "is_verified", "created_at"]
     list_filter = ["status", "is_verified", "created_at"]
-    search_fields = ["store_name", "store_slug", "owner__username", "email"]
+    search_fields = ["store_name", "owner__username", "email"]
     readonly_fields = ["store_id", "created_at", "updated_at"]
-    prepopulated_fields = {"store_slug": ("store_name",)}
 
     fieldsets = (
-        ("Store Information", {"fields": ("store_id", "owner", "store_name", "store_slug", "description")}),
-        ("Media", {"fields": ("logo", "banner")}),
+        ("Store Information", {"fields": ("store_id", "owner", "store_name", "description")}),
         ("Contact", {"fields": ("email", "phone", "website")}),
         ("Status", {"fields": ("status", "is_verified")}),
         ("Settings", {"fields": ("settings",), "classes": ("collapse",)}),
@@ -65,8 +63,8 @@ class StoreAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(VTONRequestEnhanced)
-class VTONRequestEnhancedAdmin(admin.ModelAdmin):
+@admin.register(VTONRequest)
+class VTONRequestAdmin(admin.ModelAdmin):
     list_display = ["request_id", "user", "store", "status", "source", "created_at", "processing_duration_seconds"]
     list_filter = ["status", "source", "created_at", "is_saved", "is_shared"]
     search_fields = ["request_id", "user__username", "store__store_name", "ip_address"]

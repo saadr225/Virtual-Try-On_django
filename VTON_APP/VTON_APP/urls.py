@@ -24,7 +24,10 @@ from django.views.static import serve
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("app.urls")),
-    path("api/", include("api.urls")),
+    # External API - Third-party clients
+    path("api/v1/", include("api.client_api.urls")),
+    # Internal API - Your frontend
+    path("internal/api/", include("api.internal_api.urls")),
     # Serve media files efficiently through WhiteNoise (works in both dev and prod)
     re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
 ]

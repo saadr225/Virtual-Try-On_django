@@ -1,7 +1,7 @@
 from django.urls import path
-from .views import (
-    semantic_views,
-)
+from api.internal_api.views import semantic_views
+
+app_name = "internal_api"
 
 # from rest_framework_simplejwt.views import TokenRefreshView
 urlpatterns = [

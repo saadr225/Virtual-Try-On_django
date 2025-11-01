@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from api.models import VTONRequest
+from api.client_api.models import VTONRequest
 from app.Controllers.HelpersController import VTONRequestHelper
 
 

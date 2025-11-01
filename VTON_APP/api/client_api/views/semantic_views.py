@@ -1,9 +1,11 @@
+"Views for handling Virtual Try-On (VTON) requests and responses."
+
 from django.shortcuts import render, get_object_or_404
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from django.http import HttpResponse
 from rest_framework.response import Response
-from api.serializers import VTONSerializer, VTONResponseSerializer
-from api.models import VTONRequest
+from api.client_api.serializers import VTONSerializer, VTONResponseSerializer
+from api.client_api.models import VTONRequest
 from app.Controllers.HelpersController import FileController
 from app.Controllers.VTONController import VTONController
 from rest_framework import status

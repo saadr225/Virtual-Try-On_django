@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from .user_models import APIKey
-from .vton_models import VTONRequestEnhanced
+from .vton_models import VTONRequest
 from .store_models import Store
 import uuid
 from decimal import Decimal
@@ -14,7 +14,7 @@ class APIUsageLog(models.Model):
 
     # Request info
     api_key = models.ForeignKey(APIKey, on_delete=models.CASCADE, related_name="usage_logs")
-    vton_request = models.ForeignKey(VTONRequestEnhanced, on_delete=models.SET_NULL, null=True, blank=True, related_name="usage_logs")
+    vton_request = models.ForeignKey(VTONRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name="usage_logs")
 
     # Endpoint details
     endpoint = models.CharField(max_length=255)
