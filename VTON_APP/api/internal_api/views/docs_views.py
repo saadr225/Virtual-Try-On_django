@@ -13,7 +13,6 @@ from django.conf import settings
 from api.internal_api.utils.permissions import admin_required, IsAdminUser
 from app.Controllers.ResponseCodesController import get_response_code
 import os
-import yaml
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,13 +33,10 @@ def client_api_spec(request):
     Serve the Client API OpenAPI specification file.
 
     This endpoint is public and accessible without authentication.
-    Returns the OpenAPI spec for the external-facing VTON client API.
-
-    Query Parameters:
-        format (optional): 'json' or 'yaml' (default: yaml)
+    Returns the OpenAPI spec YAML file for the external-facing VTON client API.
 
     Returns:
-        Response: OpenAPI specification in requested format
+        FileResponse: OpenAPI specification YAML file
     """
     try:
         # Check if the spec file exists
@@ -52,29 +48,8 @@ def client_api_spec(request):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Get format preference from query params
-        format_type = request.GET.get("format", "yaml").lower()
-
-        # Read the YAML file
-        with open(CLIENT_SPEC_PATH, "r", encoding="utf-8") as f:
-            spec_content = yaml.safe_load(f)
-
-        # Return in requested format
-        if format_type == "json":
-            return Response(spec_content, status=status.HTTP_200_OK)
-        else:
-            # Return YAML as plain text
-            with open(CLIENT_SPEC_PATH, "r", encoding="utf-8") as f:
-                yaml_content = f.read()
-            return Response(yaml_content, status=status.HTTP_200_OK, content_type="application/x-yaml")
-
-    except yaml.YAMLError as e:
-        logger.error(f"Error parsing Client API spec YAML: {str(e)}")
-        response_code = get_response_code("INTERNAL_SERVER_ERROR")
-        return Response(
-            {"code": response_code["code"], "message": response_code["message"], "detail": "Error parsing specification file"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        # Return the YAML file directly
+        return FileResponse(open(CLIENT_SPEC_PATH, "rb"), content_type="application/x-yaml", as_attachment=False, filename="client_api.yaml")
 
     except Exception as e:
         logger.error(f"Unexpected error serving Client API spec: {str(e)}")
@@ -93,13 +68,10 @@ def internal_api_spec(request):
     Serve the Internal API OpenAPI specification file.
 
     This endpoint is protected and only accessible to admin users.
-    Returns the OpenAPI spec for the internal API (authentication, user management, admin operations).
-
-    Query Parameters:
-        format (optional): 'json' or 'yaml' (default: yaml)
+    Returns the OpenAPI spec YAML file for the internal API (authentication, user management, admin operations).
 
     Returns:
-        Response: OpenAPI specification in requested format
+        FileResponse: OpenAPI specification YAML file
 
     Permissions:
         - Requires authentication (JWT token)
@@ -115,29 +87,8 @@ def internal_api_spec(request):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Get format preference from query params
-        format_type = request.GET.get("format", "yaml").lower()
-
-        # Read the YAML file
-        with open(INTERNAL_SPEC_PATH, "r", encoding="utf-8") as f:
-            spec_content = yaml.safe_load(f)
-
-        # Return in requested format
-        if format_type == "json":
-            return Response(spec_content, status=status.HTTP_200_OK)
-        else:
-            # Return YAML as plain text
-            with open(INTERNAL_SPEC_PATH, "r", encoding="utf-8") as f:
-                yaml_content = f.read()
-            return Response(yaml_content, status=status.HTTP_200_OK, content_type="application/x-yaml")
-
-    except yaml.YAMLError as e:
-        logger.error(f"Error parsing Internal API spec YAML: {str(e)}")
-        response_code = get_response_code("INTERNAL_SERVER_ERROR")
-        return Response(
-            {"code": response_code["code"], "message": response_code["message"], "detail": "Error parsing specification file"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        # Return the YAML file directly
+        return FileResponse(open(INTERNAL_SPEC_PATH, "rb"), content_type="application/x-yaml", as_attachment=False, filename="internal_api.yaml")
 
     except Exception as e:
         logger.error(f"Unexpected error serving Internal API spec: {str(e)}")
@@ -170,8 +121,8 @@ def api_docs_info(request):
                 "path": "/api/internal/docs/client-api-spec/",
                 "description": "OpenAPI specification for the external-facing VTON Client API",
                 "access": "public",
-                "formats": ["yaml", "json"],
-                "usage": "Add ?format=json or ?format=yaml query parameter",
+                "format": "yaml",
+                "content_type": "application/x-yaml",
             },
             {
                 "name": "Internal API Specification",
@@ -179,8 +130,8 @@ def api_docs_info(request):
                 "description": "OpenAPI specification for the Internal API (authentication, admin, user management)",
                 "access": "admin only",
                 "authentication": "JWT Bearer token required",
-                "formats": ["yaml", "json"],
-                "usage": "Add ?format=json or ?format=yaml query parameter",
+                "format": "yaml",
+                "content_type": "application/x-yaml",
             },
         ],
     }

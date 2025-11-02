@@ -875,20 +875,46 @@ paths:
                       properties:
                         name:
                           type: string
+                          example: Client API Specification
                         path:
                           type: string
+                          example: /api/internal/docs/client-api-spec/
                         description:
                           type: string
+                          example: OpenAPI specification for the external-facing VTON Client API
                         access:
                           type: string
+                          enum: [public, admin only]
+                          example: public
                         authentication:
                           type: string
-                        formats:
-                          type: array
-                          items:
-                            type: string
-                        usage:
+                          example: JWT Bearer token required
+                        format:
                           type: string
+                          example: yaml
+                        content_type:
+                          type: string
+                          example: application/x-yaml
+              examples:
+                docsInfo:
+                  summary: Available documentation endpoints
+                  value:
+                    code: SUCCESS
+                    message: API documentation endpoints
+                    endpoints:
+                      - name: Client API Specification
+                        path: /api/internal/docs/client-api-spec/
+                        description: OpenAPI specification for the external-facing VTON Client API
+                        access: public
+                        format: yaml
+                        content_type: application/x-yaml
+                      - name: Internal API Specification
+                        path: /api/internal/docs/internal-api-spec/
+                        description: OpenAPI specification for the Internal API (authentication, admin, user management)
+                        access: admin only
+                        authentication: JWT Bearer token required
+                        format: yaml
+                        content_type: application/x-yaml
 
   /docs/client-api-spec/:
     get:
@@ -896,43 +922,60 @@ paths:
         - Documentation
       summary: Get Client API Specification
       description: |
-        Retrieve the OpenAPI specification for the Client API (VTON service).
-        This endpoint is public and does not require authentication.
-        Supports both JSON and YAML formats via query parameter.
+        Retrieve the OpenAPI specification YAML file for the Client API (VTON service).
+
+        **Access:** Public - No authentication required
+
+        **Format:** YAML only (application/x-yaml)
+
+        **Usage:**
+        - Download directly or display in browser
+        - Import into Swagger UI, Redoc, or other OpenAPI tools
+        - Use for API client generation
+
+        The file is served directly without parsing, ensuring fast response times.
       operationId: getClientApiSpec
       security: []
-      parameters:
-        - name: format
-          in: query
-          description: Response format
-          schema:
-            type: string
-            enum: [json, yaml]
-            default: yaml
       responses:
         "200":
-          description: OpenAPI specification retrieved successfully
+          description: OpenAPI specification YAML file retrieved successfully
           content:
-            application/json:
-              schema:
-                type: object
-                description: OpenAPI 3.0 specification object
             application/x-yaml:
               schema:
                 type: string
-                description: OpenAPI 3.0 specification in YAML format
+                format: binary
+                description: Complete OpenAPI 3.0 specification in YAML format
+          headers:
+            Content-Type:
+              description: YAML content type
+              schema:
+                type: string
+                example: application/x-yaml
+            Content-Disposition:
+              description: Inline display (not download)
+              schema:
+                type: string
+                example: inline; filename="client_api.yaml"
         "404":
           description: Specification file not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: ERR000
+                message: Unknown error code.
+                detail: Client API specification file not found
         "500":
-          description: Error parsing specification file
+          description: Internal server error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: SYS001
+                message: Internal server error
+                detail: An unexpected error occurred
 
   /docs/internal-api-spec/:
     get:
@@ -940,56 +983,84 @@ paths:
         - Documentation
       summary: Get Internal API Specification
       description: |
-        Retrieve the OpenAPI specification for the Internal API.
-        This endpoint requires admin authentication.
-        Supports both JSON and YAML formats via query parameter.
+        Retrieve the OpenAPI specification YAML file for the Internal API.
+
+        **Access:** Admin users only - Requires JWT authentication
+
+        **Format:** YAML only (application/x-yaml)
+
+        **Permissions Required:**
+        - Valid JWT access token
+        - Admin privileges (is_staff, is_superuser, or user_type='admin')
+
+        **Usage:**
+        - Download directly or display in browser
+        - Import into Swagger UI, Redoc, or other OpenAPI tools
+        - Use for internal API documentation
+
+        The file is served directly without parsing, ensuring fast response times.
       operationId: getInternalApiSpec
       security:
         - BearerAuth: []
-      parameters:
-        - name: format
-          in: query
-          description: Response format
-          schema:
-            type: string
-            enum: [json, yaml]
-            default: yaml
       responses:
         "200":
-          description: OpenAPI specification retrieved successfully
+          description: OpenAPI specification YAML file retrieved successfully
           content:
-            application/json:
-              schema:
-                type: object
-                description: OpenAPI 3.0 specification object
             application/x-yaml:
               schema:
                 type: string
-                description: OpenAPI 3.0 specification in YAML format
+                format: binary
+                description: Complete OpenAPI 3.0 specification in YAML format
+          headers:
+            Content-Type:
+              description: YAML content type
+              schema:
+                type: string
+                example: application/x-yaml
+            Content-Disposition:
+              description: Inline display (not download)
+              schema:
+                type: string
+                example: inline; filename="internal_api.yaml"
         "401":
           description: Authentication required
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: AUT001
+                message: Authentication credentials were not provided
         "403":
           description: Admin access required
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: ACCESS_DENIED
+                message: Access denied
+                detail: Admin privileges required to access this endpoint
         "404":
           description: Specification file not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: ERR000
+                message: Unknown error code.
+                detail: Internal API specification file not found
         "500":
-          description: Error parsing specification file
+          description: Internal server error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: SYS001
+                message: Internal server error
+                detail: An unexpected error occurred
 
 components:
   securitySchemes:
