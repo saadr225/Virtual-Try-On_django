@@ -341,7 +341,16 @@ def test_get_user_info(internal_api_url, logger, test_data):
     """Test getting current user information."""
     log_section(logger, "GET USER INFO TEST")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        username = list(test_data["user_tokens"].keys())[0]
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
@@ -361,7 +370,16 @@ def test_update_user_profile(internal_api_url, logger, test_data):
     """Test updating user profile."""
     log_section(logger, "UPDATE USER PROFILE TEST")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
@@ -378,11 +396,23 @@ def test_change_password(internal_api_url, logger, test_data):
     """Test changing user password."""
     log_section(logger, "CHANGE PASSWORD TEST")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
-    data = {"old_password": "TestPass123!", "new_password": "NewTestPass123!", "new_password2": "NewTestPass123!"}
+    old_password = test_data["test_users"][username]["password"]
+    new_password = "NewTestPass123!"
+
+    data = {"old_password": old_password, "new_password": new_password, "new_password2": new_password}
 
     success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/change-password/", token=token, data=data)
 
@@ -390,7 +420,7 @@ def test_change_password(internal_api_url, logger, test_data):
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
     # Update stored password for future tests
-    test_data["test_users"][username]["password"] = "NewTestPass123!"
+    test_data["test_users"][username]["password"] = new_password
     logger.info("  Password changed successfully")
 
 
@@ -398,7 +428,16 @@ def test_user_logout(internal_api_url, logger, test_data):
     """Test user logout."""
     log_section(logger, "USER LOGOUT TEST")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     refresh_token = test_data["user_tokens"][username].get("refresh")
     access_token = test_data["user_tokens"][username].get("access")
     assert refresh_token, f"No refresh token found for user {username}"
@@ -419,7 +458,16 @@ def test_get_user_quota(internal_api_url, logger, test_data):
     """Test retrieving user's quota information."""
     log_section(logger, "GET USER QUOTA")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
@@ -445,7 +493,16 @@ def test_create_api_key(internal_api_url, logger, test_data, key_name):
     """Test creating a new API key."""
     log_section(logger, f"CREATE API KEY - {key_name}")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
@@ -470,7 +527,16 @@ def test_list_api_keys(internal_api_url, logger, test_data):
     """Test listing user's API keys."""
     log_section(logger, "LIST API KEYS")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
@@ -492,7 +558,16 @@ def test_get_api_key_detail(internal_api_url, logger, test_data):
     """Test getting detailed information about an API key."""
     log_section(logger, "GET API KEY DETAIL")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     key_name = "production-key"
     key_id = test_data["api_keys"].get(key_name)
@@ -517,7 +592,16 @@ def test_update_api_key(internal_api_url, logger, test_data):
     """Test updating an API key."""
     log_section(logger, "UPDATE API KEY")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     key_name = "production-key"
     key_id = test_data["api_keys"].get(key_name)
@@ -537,7 +621,16 @@ def test_regenerate_api_key(internal_api_url, logger, test_data):
     """Test regenerating an API key."""
     log_section(logger, "REGENERATE API KEY")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     key_name = "production-key"
     key_id = test_data["api_keys"].get(key_name)
@@ -557,7 +650,16 @@ def test_get_api_key_stats(internal_api_url, logger, test_data):
     """Test getting API key usage statistics."""
     log_section(logger, "GET API KEY STATS")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     key_name = "production-key"
     key_id = test_data["api_keys"].get(key_name)
@@ -582,7 +684,16 @@ def test_delete_api_key(internal_api_url, logger, test_data, key_name):
     """Test deleting an API key."""
     log_section(logger, f"DELETE API KEY - {key_name}")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available")
+
     token = test_data["user_tokens"][username].get("access")
     key_id = test_data["api_keys"].get(key_name)
     assert token, f"No token found for user {username}"
@@ -728,13 +839,15 @@ def test_admin_get_user_quota(internal_api_url, logger, test_data):
 
     assert success, f"Admin get quota failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    assert resp_data and "quota_info" in resp_data, "Quota info not found in response"
 
-    quota = resp_data["quota_info"]
+    # The response has "user_quota" not "quota_info"
+    assert resp_data and "user_quota" in resp_data, "User quota not found in response"
+
+    quota = resp_data["user_quota"]
     logger.info(f"  Max API Keys: {quota.get('max_api_keys')}")
     logger.info(f"  Current API Keys: {quota.get('current_api_keys')}")
     logger.info(f"  Monthly Quota: {quota.get('user_monthly_quota')}")
-    logger.info(f"  Can Create More: {quota.get('can_create_more')}")
+    logger.info(f"  Quota Remaining: {quota.get('quota_remaining')}")
 
 
 def test_update_user_quota(internal_api_url, logger, test_data):
@@ -876,13 +989,30 @@ def test_non_admin_cannot_access_admin_endpoints(internal_api_url, logger, test_
     """Test that non-admin users cannot access admin endpoints."""
     log_section(logger, "PERMISSION TEST: Non-admin access denied")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available for permission test")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/users/quotas/", token=token)
 
     assert response is not None, "Request failed - no response object"
+
+    # Note: If the server is not properly restricting access, this test will fail
+    # The expected behavior is 403 Forbidden for non-admin users
+    if response.status_code == 200:
+        logger.warning(f"⚠ WARNING: Non-admin user '{username}' was able to access admin endpoint!")
+        logger.warning("  This is a security issue - admin endpoints should be restricted")
+        pytest.fail("Non-admin user should not access admin endpoint (got 200 instead of 403)")
+
     assert response.status_code == 403, f"Non-admin should not access admin endpoint (got {response.status_code})"
     logger.info("✓ Non-admin access denied to admin endpoint (403 Forbidden)")
 
@@ -894,7 +1024,8 @@ def test_healthcheck(base_url, logger):
     """Test healthcheck endpoint."""
     log_section(logger, "HEALTHCHECK TEST")
 
-    success, response, resp_data = make_request(base_url, logger, "GET", "/api/v1/health/")
+    # Based on URL patterns, healthcheck is at /api/v1/ not /api/v1/health/
+    success, response, resp_data = make_request(base_url, logger, "GET", "/api/v1/")
 
     assert success, f"Healthcheck failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
@@ -971,7 +1102,16 @@ def test_delete_account(internal_api_url, logger, test_data):
     """Test account deletion (soft delete)."""
     log_section(logger, "DELETE ACCOUNT TEST")
 
-    username = list(test_data["user_tokens"].keys())[0]
+    # Get a non-admin user for this test
+    username = None
+    for user, token_data in test_data["user_tokens"].items():
+        if user in test_data["test_users"]:  # Only test users, not admin
+            username = user
+            break
+
+    if not username:
+        pytest.skip("No regular test user available for account deletion test")
+
     token = test_data["user_tokens"][username].get("access")
     assert token, f"No token found for user {username}"
 
