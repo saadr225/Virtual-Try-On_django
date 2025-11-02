@@ -916,6 +916,49 @@ def test_list_all_api_keys(internal_api_url, logger, test_data):
         logger.info(f"    - {key.get('name')} (User: {key.get('username')}): {key.get('status')}")
 
 
+def test_admin_create_api_key_for_testing(internal_api_url, logger, test_data):
+    """Test admin creating API keys for testing admin update/delete operations."""
+    log_section(logger, "ADMIN: CREATE API KEY FOR ADMIN TESTS")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    # Get a regular test user to create API keys for
+    regular_username = None
+    for user in test_data["test_users"].keys():
+        regular_username = user
+        break
+
+    if not regular_username:
+        pytest.skip("No regular user available to create API keys for")
+
+    admin_token = test_data["user_tokens"][admin_username].get("access")
+    regular_token = test_data["user_tokens"][regular_username].get("access")
+    assert admin_token, f"No token found for admin {admin_username}"
+    assert regular_token, f"No token found for user {regular_username}"
+
+    # Create API keys using the regular user's token (to ensure they exist for admin operations)
+    for key_name in ["admin-test-key-1", "admin-test-key-2"]:
+        data = {"name": key_name, "rate_limit_per_minute": 100, "rate_limit_per_hour": 1000, "rate_limit_per_day": 10000, "monthly_quota": 500}
+
+        success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=regular_token, data=data)
+
+        if success and response.status_code == 201 and resp_data and "api_key" in resp_data:
+            key_id = resp_data["api_key"].get("key_id")
+            test_data["api_keys"][key_name] = key_id
+            logger.info(f"  Created {key_name}: {key_id}")
+        else:
+            logger.warning(f"  Failed to create {key_name}")
+
+    logger.info(f"  Total API keys available for admin tests: {len(test_data['api_keys'])}")
+
+
 def test_admin_update_api_key(internal_api_url, logger, test_data):
     """Test admin updating any user's API key."""
     log_section(logger, "ADMIN: UPDATE ANY API KEY")
@@ -932,8 +975,16 @@ def test_admin_update_api_key(internal_api_url, logger, test_data):
     admin_token = test_data["user_tokens"][admin_username].get("access")
     assert admin_token, f"No token found for admin {admin_username}"
 
-    # Find any API key to update
-    key_name = list(test_data["api_keys"].keys())[0] if test_data["api_keys"] else None
+    # Find any API key to update (prioritize admin-test keys)
+    key_name = None
+    for name in ["admin-test-key-1", "admin-test-key-2"]:
+        if name in test_data["api_keys"]:
+            key_name = name
+            break
+
+    if not key_name and test_data["api_keys"]:
+        key_name = list(test_data["api_keys"].keys())[0]
+
     if not key_name:
         pytest.skip("No API keys available for admin update test")
 
@@ -965,8 +1016,20 @@ def test_admin_delete_api_key(internal_api_url, logger, test_data):
     admin_token = test_data["user_tokens"][admin_username].get("access")
     assert admin_token, f"No token found for admin {admin_username}"
 
-    # Find any API key to delete
-    key_name = list(test_data["api_keys"].keys())[0] if test_data["api_keys"] else None
+    # Find any API key to delete (prioritize admin-test keys)
+    key_name = None
+    for name in ["admin-test-key-2"]:  # Use the second test key for deletion
+        if name in test_data["api_keys"]:
+            key_name = name
+            break
+
+    if not key_name and test_data["api_keys"]:
+        # Find any remaining key
+        for name in list(test_data["api_keys"].keys()):
+            if name.startswith("admin-test-"):
+                key_name = name
+                break
+
     if not key_name:
         pytest.skip("No API keys available for admin delete test")
 

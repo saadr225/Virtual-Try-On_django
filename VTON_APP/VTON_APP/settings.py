@@ -313,6 +313,11 @@ LOGGING = {
             "style": "{",
             "datefmt": "%H:%M:%S",
         },
+        "request": {
+            "format": '{asctime} [{levelname}] {name}: "{method} {path}" {status_code} {duration_ms}ms',
+            "style": "{",
+            "datefmt": "%H:%M:%S",
+        },
     },
     "filters": {
         "require_debug_false": {
@@ -332,16 +337,9 @@ LOGGING = {
             "formatter": "verbose",
             "filters": ["require_debug_true"],
         },
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": "django.log",
-            "formatter": "verbose",
-        },
-        "file_errors": {
-            "class": "logging.FileHandler",
-            "filename": "errors.log",
-            "formatter": "verbose",
-            "level": "ERROR",
+        "console_request": {
+            "class": "logging.StreamHandler",
+            "formatter": "request",
         },
     },
     "root": {
@@ -356,7 +354,7 @@ LOGGING = {
             "propagate": False,
         },
         "django.request": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console"],
             "level": "ERROR",  # Only log request errors
             "propagate": False,
         },
@@ -372,28 +370,28 @@ LOGGING = {
         },
         # Application loggers
         "api": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "api.client_api": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "api.internal_api": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "app": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
         # Middleware loggers
         "app.utils.middleware": {
-            "handlers": ["console", "file_errors"],
+            "handlers": ["console_request"] if (DEBUG_FLAGS.get("LOG_REQUESTS") or DEBUG_FLAGS.get("LOG_RESPONSES")) else ["console"],
             "level": "DEBUG" if (DEBUG_FLAGS.get("LOG_REQUESTS") or DEBUG_FLAGS.get("LOG_RESPONSES")) else "INFO",
             "propagate": False,
         },
