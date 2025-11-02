@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.http import FileResponse, Http404
+from django.conf import settings
 from api.internal_api.utils.permissions import admin_required, IsAdminUser
 from app.Controllers.ResponseCodesController import get_response_code
 import os
@@ -18,8 +19,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Define the base path to the OpenAPI spec files
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-SPEC_DIR = os.path.join(BASE_DIR, "docs", "api", "openapi")
+# settings.BASE_DIR points to VTON_APP directory, we need to go up one level to project root
+PROJECT_ROOT = os.path.dirname(settings.BASE_DIR)
+SPEC_DIR = os.path.join(PROJECT_ROOT, "docs", "api", "openapi")
 CLIENT_SPEC_PATH = os.path.join(SPEC_DIR, "client_api.yaml")
 INTERNAL_SPEC_PATH = os.path.join(SPEC_DIR, "internal_api.yaml")
 
