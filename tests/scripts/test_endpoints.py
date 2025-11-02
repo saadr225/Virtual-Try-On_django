@@ -11,18 +11,18 @@ Tests all endpoints for the API Key Management System including:
 - Permission-based access control
 
 Usage:
-    python test_endpoints.py [--base-url http://localhost:8000] [--verbose]
+    pytest test_endpoints.py -v
+    pytest test_endpoints.py --base-url http://localhost:8000 -v
 
 Requirements:
-    pip install requests colorama
+    pip install requests colorama pytest
 """
 
+import pytest
 import requests
 import json
 import logging
-import argparse
 import time
-import sys
 import os
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
@@ -98,1023 +98,904 @@ def setup_logger(verbose: bool = False) -> logging.Logger:
     return logger
 
 
-class APITestSuite:
-    """Main test suite class for API endpoint testing."""
+@pytest.fixture(scope="session")
+def base_url(request):
+    """Fixture for base URL."""
+    return request.config.getoption("--base-url", default="http://localhost:8000")
 
-    def __init__(self, base_url: str = "http://localhost:8000", verbose: bool = False):
-        self.base_url = base_url.rstrip("/")
-        self.internal_api_url = f"{self.base_url}/internal/api"
-        self.logger = setup_logger(verbose)
-        self.verbose = verbose
 
-        # Storage for test data
-        self.user_tokens: Dict[str, Dict] = {}
-        self.test_users: Dict[str, Dict] = {}
-        self.api_keys: Dict[str, str] = {}
-        self.test_results = {"passed": 0, "failed": 0, "errors": []}
+@pytest.fixture(scope="session")
+def verbose(request):
+    """Fixture for verbose logging."""
+    return request.config.getoption("--verbose", default=False)
 
-        self.logger.info(f"{'='*70}")
-        self.logger.info(f"API Test Suite Initialized")
-        self.logger.info(f"Base URL: {self.base_url}")
-        self.logger.info(f"{'='*70}\n")
 
-    def _print_section(self, title: str):
-        """Print a formatted section header."""
-        if COLORS_AVAILABLE:
-            self.logger.info(f"\n{Fore.CYAN}{Back.BLACK}{'='*70}")
-            self.logger.info(f"{title.center(70)}")
-            self.logger.info(f"{'='*70}{Style.RESET_ALL}\n")
-        else:
-            self.logger.info(f"\n{'='*70}")
-            self.logger.info(f"{title.center(70)}")
-            self.logger.info(f"{'='*70}\n")
+@pytest.fixture(scope="session")
+def logger(verbose):
+    """Fixture for logger."""
+    return setup_logger(verbose)
 
-        # Also log section to file
-        logging.getLogger("APITestSuite").info(f"\n[SECTION] {title}")
-        logging.getLogger("APITestSuite").info("-" * 60)
 
-    def _log_request(self, method: str, endpoint: str, data: Any = None, headers: Dict = None):
-        """Log outgoing request details."""
-        full_url = f"{self.internal_api_url}{endpoint}"
+@pytest.fixture(scope="session")
+def test_data():
+    """Fixture for shared test data."""
+    return {
+        "user_tokens": {},
+        "test_users": {},
+        "api_keys": {},
+    }
 
-        # Console debug logging (verbose)
-        auth_indicator = ""
-        if headers and "Authorization" in headers:
-            token = headers["Authorization"]
-            if "Bearer" in token:
-                auth_indicator = f" [Auth: {token[:30]}...]"
 
-        if COLORS_AVAILABLE:
-            self.logger.debug(f">> {Fore.BLUE}{method} {endpoint}{auth_indicator}{Style.RESET_ALL}")
-        else:
-            self.logger.debug(f">> {method} {endpoint}{auth_indicator}")
+@pytest.fixture(scope="session")
+def internal_api_url(base_url):
+    """Fixture for internal API URL."""
+    return f"{base_url}/internal/api"
 
-        if data:
-            self.logger.debug(f"  Request Data: {json.dumps(data, indent=2)}")
 
-        # File logging - more structured
-        file_logger = logging.getLogger("APITestSuite")
-        # Only log to file if not in debug mode (to keep it clean)
-        if not self.verbose:
-            for handler in file_logger.handlers:
+def _log_request(logger, method: str, endpoint: str, data: Any = None, headers: Dict = None):
+    """Log outgoing request details."""
+    # Console debug logging (verbose)
+    auth_indicator = ""
+    if headers and "Authorization" in headers:
+        token = headers["Authorization"]
+        if "Bearer" in token:
+            auth_indicator = f" [Auth: {token[:30]}...]"
+
+    if COLORS_AVAILABLE:
+        logger.debug(f">> {Fore.BLUE}{method} {endpoint}{auth_indicator}{Style.RESET_ALL}")
+    else:
+        logger.debug(f">> {method} {endpoint}{auth_indicator}")
+
+    if data:
+        logger.debug(f"  Request Data: {json.dumps(data, indent=2)}")
+
+    # File logging - more structured
+    file_logger = logging.getLogger("APITestSuite")
+    # Only log to file if not in debug mode (to keep it clean)
+    if not logger.isEnabledFor(logging.DEBUG):
+        for handler in file_logger.handlers:
+            if isinstance(handler, logging.FileHandler):
+                file_logger.info(f"  [REQ] {method:6s} {endpoint}")
+                break
+
+
+def _log_response(logger, response: requests.Response, endpoint: str):
+    """Log incoming response details."""
+    status_color = Fore.GREEN if 200 <= response.status_code < 300 else Fore.RED
+    status_str = f"{status_color}{response.status_code}{Style.RESET_ALL}" if COLORS_AVAILABLE else str(response.status_code)
+
+    logger.debug(f"<< {status_str} from {endpoint}")
+    try:
+        response_data = response.json()
+        if logger.isEnabledFor(logging.DEBUG) and response_data:
+            logger.debug(f"  Response: {json.dumps(response_data, indent=2)}")
+
+        # File logging - structured response info
+        if not logger.isEnabledFor(logging.DEBUG):
+            for handler in logging.getLogger("APITestSuite").handlers:
                 if isinstance(handler, logging.FileHandler):
-                    file_logger.info(f"  [REQ] {method:6s} {full_url}")
+                    resp_code = response_data.get("code", "UNKNOWN") if response_data else "N/A"
+                    logging.getLogger("APITestSuite").info(f"  [RES] {response.status_code} - {resp_code}")
                     break
 
-    def _log_response(self, response: requests.Response, endpoint: str):
-        """Log incoming response details."""
-        status_color = Fore.GREEN if 200 <= response.status_code < 300 else Fore.RED
-        status_str = f"{status_color}{response.status_code}{Style.RESET_ALL}" if COLORS_AVAILABLE else str(response.status_code)
+        return response_data
+    except:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"  Response: {response.text}")
+        return None
 
-        self.logger.debug(f"<< {status_str} from {endpoint}")
-        try:
-            response_data = response.json()
-            if self.verbose and response_data:
-                self.logger.debug(f"  Response: {json.dumps(response_data, indent=2)}")
 
-            # File logging - structured response info
-            if not self.verbose:
-                for handler in logging.getLogger("APITestSuite").handlers:
-                    if isinstance(handler, logging.FileHandler):
-                        resp_code = response_data.get("code", "UNKNOWN") if response_data else "N/A"
-                        logging.getLogger("APITestSuite").info(f"  [RES] {response.status_code} - {resp_code}")
-                        break
+def make_request(
+    internal_api_url: str, logger, method: str, endpoint: str, token: Optional[str] = None, data: Optional[Dict] = None, params: Optional[Dict] = None
+) -> Tuple[bool, Optional[requests.Response], Optional[Dict]]:
+    """Make HTTP request and return success status, response object, and parsed JSON."""
+    url = f"{internal_api_url}{endpoint}"
+    headers = {"Content-Type": "application/json"}
 
-            return response_data
-        except:
-            if self.verbose:
-                self.logger.debug(f"  Response: {response.text}")
-            return None
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
-    def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        token: Optional[str] = None,
-        data: Optional[Dict] = None,
-        params: Optional[Dict] = None,
-    ) -> Tuple[bool, Optional[requests.Response], Optional[Dict]]:
-        """Make HTTP request and return success status, response object, and parsed JSON."""
-        url = f"{self.internal_api_url}{endpoint}"
-        headers = {"Content-Type": "application/json"}
+    _log_request(logger, method, endpoint, data, headers)
 
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        self._log_request(method, endpoint, data, headers)
-
-        try:
-            if method == "GET":
-                response = requests.get(url, headers=headers, params=params, timeout=10)
-            elif method == "POST":
-                response = requests.post(url, json=data, headers=headers, timeout=10)
-            elif method == "PUT":
-                response = requests.put(url, json=data, headers=headers, timeout=10)
-            elif method == "PATCH":
-                response = requests.patch(url, json=data, headers=headers, timeout=10)
-            elif method == "DELETE":
-                response = requests.delete(url, headers=headers, timeout=10)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-            response_data = self._log_response(response, endpoint)
-            success = 200 <= response.status_code < 300
-
-            return success, response, response_data
-
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Request failed: {str(e)}"
-            self.logger.error(error_msg)
-            self.test_results["errors"].append(error_msg)
-            return False, None, None
-
-    def _assert_success(self, success: bool, response: requests.Response, test_name: str, expected_status: int = None) -> bool:
-        """Assert that a request was successful."""
-        if not success or response is None:
-            self.logger.error(f"✗ {test_name} FAILED - Request failed")
-            self.test_results["failed"] += 1
-            return False
-
-        if expected_status and response.status_code != expected_status:
-            self.logger.error(f"✗ {test_name} FAILED - Expected {expected_status}, got {response.status_code}")
-            self.test_results["failed"] += 1
-            # Also log to file
-            logging.getLogger("APITestSuite").info(f"  [FAIL] {test_name}")
-            return False
-
-        self.logger.info(f"✓ {test_name} PASSED")
-        self.test_results["passed"] += 1
-        # Also log to file
-        logging.getLogger("APITestSuite").info(f"  [PASS] {test_name}")
-        return True
-
-    def _assert_failure(self, success: bool, response: requests.Response, test_name: str, expected_status: int) -> bool:
-        """Assert that a request failed as expected."""
-        if not response:
-            self.logger.error(f"✗ {test_name} FAILED - Request failed unexpectedly")
-            self.test_results["failed"] += 1
-            return False
-
-        if response.status_code == expected_status:
-            self.logger.info(f"✓ {test_name} PASSED (correctly got {expected_status})")
-            self.test_results["passed"] += 1
-            return True
-        else:
-            self.logger.error(f"✗ {test_name} FAILED - Expected {expected_status}, got {response.status_code}")
-            self.test_results["failed"] += 1
-            return False
-
-    # ==================== AUTHENTICATION TESTS ====================
-
-    def test_user_registration(self, username: str, email: str, password: str = "TestPass123!") -> bool:
-        """Test user registration."""
-        self._print_section(f"USER REGISTRATION TEST")
-
-        data = {
-            "username": username,
-            "email": email,
-            "password": password,
-            "password2": password,  # Changed from password_confirm to password2
-            "first_name": "Test",
-            "last_name": "User",
-        }
-
-        success, response, resp_data = self._make_request("POST", "/auth/register/", data=data)
-
-        if self._assert_success(success, response, f"Register user '{username}'", 201):
-            self.test_users[username] = {"email": email, "password": password, "username": username}
-            self.logger.info(f"  User email: {email}")
-            return True
-
-        return False
-
-    def test_user_login(self, username: str, password: str) -> bool:
-        """Test user login and token retrieval."""
-        self._print_section(f"USER LOGIN TEST - {username}")
-
-        data = {"username": username, "password": password}
-
-        success, response, resp_data = self._make_request("POST", "/auth/login/", data=data)
-
-        if self._assert_success(success, response, f"Login user '{username}'", 200):
-            if resp_data and "access" in resp_data:
-                self.user_tokens[username] = {
-                    "access": resp_data["access"],
-                    "refresh": resp_data.get("refresh"),
-                    "user_type": resp_data.get("user_type", "customer"),
-                }
-                self.logger.info(f"  User type: {self.user_tokens[username].get('user_type')}")
-                self.logger.info(f"  Access token obtained")
-                return True
-
-        return False
-
-    def test_user_logout(self, username: str) -> bool:
-        """Test user logout."""
-        self._print_section(f"USER LOGOUT TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("refresh")
-        if not token:
-            self.logger.error(f"No refresh token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"refresh": token}
-
-        success, response, resp_data = self._make_request("POST", "/auth/logout/", data=data)
-
-        if self._assert_success(success, response, f"Logout user '{username}'", 200):
-            self.logger.info(f"  User logged out successfully")
-            return True
-
-        return False
-
-    def test_token_refresh(self, username: str) -> bool:
-        """Test JWT token refresh."""
-        self._print_section(f"TOKEN REFRESH TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("refresh")
-        if not token:
-            self.logger.error(f"No refresh token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"refresh": token}
-
-        success, response, resp_data = self._make_request("POST", "/auth/token/refresh/", data=data)
-
-        if self._assert_success(success, response, f"Refresh token for '{username}'", 200):
-            if resp_data and "access" in resp_data:
-                # Update stored tokens
-                self.user_tokens[username]["access"] = resp_data["access"]
-                self.user_tokens[username]["refresh"] = resp_data.get("refresh", token)
-                self.logger.info(f"  New access token obtained")
-                return True
-
-        return False
-
-    def test_get_user_info(self, username: str) -> bool:
-        """Test getting current user information."""
-        self._print_section(f"GET USER INFO TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", "/auth/me/", token=token)
-
-        if self._assert_success(success, response, f"Get user info for '{username}'", 200):
-            if resp_data and "user" in resp_data:
-                user_info = resp_data["user"]
-                self.logger.info(f"  Username: {user_info.get('username')}")
-                self.logger.info(f"  Email: {user_info.get('email')}")
-                self.logger.info(f"  User type: {user_info.get('user_type')}")
-                return True
-
-        return False
-
-    def test_update_user_profile(self, username: str) -> bool:
-        """Test updating user profile."""
-        self._print_section(f"UPDATE USER PROFILE TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"first_name": "Updated", "last_name": "TestUser", "phone_number": "+1234567890"}
-
-        success, response, resp_data = self._make_request("PUT", "/auth/profile/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Update profile for '{username}'", 200):
-            self.logger.info(f"  Profile updated successfully")
-            return True
-
-        return False
-
-    def test_change_password(self, username: str) -> bool:
-        """Test changing user password."""
-        self._print_section(f"CHANGE PASSWORD TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"old_password": "TestPass123!", "new_password": "NewTestPass123!", "new_password2": "NewTestPass123!"}
-
-        success, response, resp_data = self._make_request("POST", "/auth/change-password/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Change password for '{username}'", 200):
-            self.logger.info(f"  Password changed successfully")
-            # Update stored password for future tests
-            if username in self.test_users:
-                self.test_users[username]["password"] = "NewTestPass123!"
-            return True
-
-        return False
-
-    def test_delete_account(self, username: str) -> bool:
-        """Test account deletion (soft delete)."""
-        self._print_section(f"DELETE ACCOUNT TEST - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"password": self.test_users.get(username, {}).get("password", "TestPass123!"), "confirm": True}
-
-        success, response, resp_data = self._make_request("POST", "/auth/delete-account/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Delete account for '{username}'", 200):
-            self.logger.info(f"  Account deleted successfully (soft delete)")
-            return True
-
-        return False
-
-    # ==================== USER QUOTA TESTS ====================
-
-    def test_get_user_quota(self, username: str) -> bool:
-        """Test retrieving user's quota information."""
-        self._print_section(f"GET USER QUOTA - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", "/quota/me/", token=token)
-
-        if self._assert_success(success, response, f"Get quota for '{username}'", 200):
-            if resp_data and "quota_info" in resp_data:
-                quota = resp_data["quota_info"]
-                self.logger.info(f"  Max API Keys: {quota.get('max_api_keys')}")
-                self.logger.info(f"  Current API Keys: {quota.get('current_api_keys')}")
-                self.logger.info(f"  Can Create More: {quota.get('can_create_more')}")
-                self.logger.info(f"  Monthly Quota Remaining: {quota.get('quota_remaining')}")
-                self.logger.info(f"  API key generation enabled: {quota.get('api_key_generation_enabled')}")
-                return True
-
-        return False
-
-    # ==================== API KEY MANAGEMENT TESTS ====================
-
-    def test_create_api_key(self, username: str, key_name: str) -> bool:
-        """Test creating a new API key."""
-        self._print_section(f"CREATE API KEY - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"name": key_name, "rate_limit_per_minute": 100, "rate_limit_per_hour": 1000, "rate_limit_per_day": 10000, "monthly_quota": 500}
-
-        success, response, resp_data = self._make_request("POST", "/api-keys/create/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Create API key '{key_name}'", 201):
-            if resp_data and "api_key" in resp_data:
-                key_id = resp_data["api_key"].get("key_id")
-                self.api_keys[key_name] = key_id
-                self.logger.info(f"  Key ID: {key_id}")
-                self.logger.info(f"  Name: {resp_data['api_key'].get('name')}")
-                self.logger.info(f"  Status: {resp_data['api_key'].get('status')}")
-                return True
-
-        return False
-
-    def test_list_api_keys(self, username: str) -> bool:
-        """Test listing user's API keys."""
-        self._print_section(f"LIST API KEYS - {username}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {username}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", "/api-keys/", token=token)
-
-        if self._assert_success(success, response, f"List API keys for '{username}'", 200):
-            if resp_data and "api_keys" in resp_data:
-                keys = resp_data["api_keys"]
-                self.logger.info(f"  Total API Keys: {len(keys)}")
-                pagination = resp_data.get("pagination", {})
-                self.logger.info(f"  Pagination: Page {pagination.get('page')}/{pagination.get('pages')}")
-                for key in keys[:5]:
-                    self.logger.info(f"    - {key.get('name')}: {key.get('status')}")
-                return True
-
-        return False
-
-    def test_get_api_key_detail(self, username: str, key_name: str) -> bool:
-        """Test getting detailed information about an API key."""
-        self._print_section(f"GET API KEY DETAIL - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not token or not key_id:
-            self.logger.error(f"Missing token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", f"/api-keys/{key_id}/", token=token)
-
-        if self._assert_success(success, response, f"Get details for API key '{key_name}'", 200):
-            if resp_data and "api_key" in resp_data:
-                key = resp_data["api_key"]
-                self.logger.info(f"  Name: {key.get('name')}")
-                self.logger.info(f"  Status: {key.get('status')}")
-                self.logger.info(f"  Rate Limits: {key.get('rate_limit_per_minute')}/min, {key.get('rate_limit_per_hour')}/hr, {key.get('rate_limit_per_day')}/day")
-                self.logger.info(f"  Monthly Quota: {key.get('monthly_quota')}")
-                self.logger.info(f"  Created: {key.get('created_at')}")
-                return True
-
-        return False
-
-    def test_update_api_key(self, username: str, key_name: str, new_status: str = "inactive") -> bool:
-        """Test updating an API key."""
-        self._print_section(f"UPDATE API KEY - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not token or not key_id:
-            self.logger.error(f"Missing token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"status": new_status}
-
-        success, response, resp_data = self._make_request("PUT", f"/api-keys/{key_id}/update/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Update API key '{key_name}'", 200):
-            self.logger.info(f"  Status updated to: {new_status}")
-            return True
-
-        return False
-
-    def test_regenerate_api_key(self, username: str, key_name: str) -> bool:
-        """Test regenerating an API key."""
-        self._print_section(f"REGENERATE API KEY - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not token or not key_id:
-            self.logger.error(f"Missing token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"confirm": True}
-
-        success, response, resp_data = self._make_request("POST", f"/api-keys/{key_id}/regenerate/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Regenerate API key '{key_name}'", 200):
-            self.logger.info(f"  New API key generated (shown once)")
-            return True
-
-        return False
-
-    def test_get_api_key_stats(self, username: str, key_name: str) -> bool:
-        """Test getting API key usage statistics."""
-        self._print_section(f"GET API KEY STATS - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not token or not key_id:
-            self.logger.error(f"Missing token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", f"/api-keys/{key_id}/stats/", token=token)
-
-        if self._assert_success(success, response, f"Get stats for API key '{key_name}'", 200):
-            if resp_data and "stats" in resp_data:
-                stats = resp_data["stats"]
-                self.logger.info(f"  Total Requests: {stats.get('total_requests', 0)}")
-                self.logger.info(f"  Requests This Month: {stats.get('requests_this_month', 0)}")
-                self.logger.info(f"  Requests Today: {stats.get('requests_today', 0)}")
-                self.logger.info(f"  Quota Remaining: {stats.get('quota_remaining', 0)}")
-                return True
-
-        return False
-
-    def test_delete_api_key(self, username: str, key_name: str) -> bool:
-        """Test deleting an API key."""
-        self._print_section(f"DELETE API KEY - {key_name}")
-
-        token = self.user_tokens.get(username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not token or not key_id:
-            self.logger.error(f"Missing token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("DELETE", f"/api-keys/{key_id}/delete/", token=token)
-
-        if self._assert_success(success, response, f"Delete API key '{key_name}'", 200):
-            if key_name in self.api_keys:
-                del self.api_keys[key_name]
-            self.logger.info(f"  API key deleted successfully")
-            return True
-
-        return False
-
-    # ==================== ADMIN TESTS ====================
-
-    def test_list_all_users_quotas(self, admin_username: str) -> bool:
-        """Test admin listing all users with quotas."""
-        self._print_section(f"ADMIN: LIST ALL USERS QUOTAS")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        params = {"page": 1, "limit": 10}
-
-        success, response, resp_data = self._make_request("GET", "/admin/users/quotas/", token=token, params=params)
-
-        if self._assert_success(success, response, f"List all users quotas", 200):
-            if resp_data and "users" in resp_data:
-                users = resp_data["users"]
-                self.logger.info(f"  Total Users Fetched: {len(users)}")
-                for user in users[:3]:
-                    self.logger.info(f"    - {user.get('username')}: {user.get('current_api_keys')}/{user.get('max_api_keys')} keys")
-                return True
-
-        return False
-
-    def test_search_users(self, admin_username: str, search_query: str) -> bool:
-        """Test admin searching for users."""
-        self._print_section(f"ADMIN: SEARCH USERS")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        params = {"q": search_query, "page": 1, "limit": 10}
-
-        success, response, resp_data = self._make_request("GET", "/admin/users/search/", token=token, params=params)
-
-        if self._assert_success(success, response, f"Search users for '{search_query}'", 200):
-            if resp_data and "users" in resp_data:
-                users = resp_data["users"]
-                self.logger.info(f"  Search Results: {len(users)} user(s) found")
-                for user in users[:5]:
-                    self.logger.info(f"    - {user.get('username')} ({user.get('email')})")
-                return True
-
-        return False
-
-    def test_get_user_details(self, admin_username: str, target_username: str) -> bool:
-        """Test admin getting comprehensive user details."""
-        self._print_section(f"ADMIN: GET USER DETAILS - {target_username}")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", f"/admin/users/{target_username}/details/", token=token)
-
-        if self._assert_success(success, response, f"Get details for user '{target_username}'", 200):
-            if resp_data and "user_details" in resp_data:
-                details = resp_data["user_details"]
-                user_info = details.get("user_info", {})
-                quota_info = details.get("quota_info", {})
-                activity = details.get("activity_summary", {})
-
-                self.logger.info(f"  User Info:")
-                self.logger.info(f"    - Username: {user_info.get('username')}")
-                self.logger.info(f"    - Email: {user_info.get('email')}")
-                self.logger.info(f"    - Type: {user_info.get('user_type')}")
-
-                self.logger.info(f"  Quota Info:")
-                self.logger.info(f"    - Max API Keys: {quota_info.get('max_api_keys')}")
-                self.logger.info(f"    - Monthly Quota: {quota_info.get('user_monthly_quota')}")
-
-                self.logger.info(f"  Activity Summary:")
-                self.logger.info(f"    - Total API Keys: {activity.get('total_api_keys')}")
-                self.logger.info(f"    - Requests (Last 30 days): {activity.get('requests_last_30_days')}")
-
-                return True
-
-        return False
-
-    def test_admin_get_user_quota(self, admin_username: str, target_username: str) -> bool:
-        """Test admin getting specific user quota (different from get_user_details)."""
-        self._print_section(f"ADMIN: GET USER QUOTA - {target_username}")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", f"/admin/users/{target_username}/quota/", token=token)
-
-        if self._assert_success(success, response, f"Admin get quota for user '{target_username}'", 200):
-            if resp_data and "quota_info" in resp_data:
-                quota = resp_data["quota_info"]
-                self.logger.info(f"  Max API Keys: {quota.get('max_api_keys')}")
-                self.logger.info(f"  Current API Keys: {quota.get('current_api_keys')}")
-                self.logger.info(f"  Monthly Quota: {quota.get('user_monthly_quota')}")
-                self.logger.info(f"  Can Create More: {quota.get('can_create_more')}")
-                return True
-
-        return False
-
-    def test_update_user_quota(self, admin_username: str, target_username: str) -> bool:
-        """Test admin updating user quotas."""
-        self._print_section(f"ADMIN: UPDATE USER QUOTA - {target_username}")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {
-            "max_api_keys": 15,
-            "user_monthly_quota": 2000,
-            "default_rate_limit_per_minute": 120,
-            "default_rate_limit_per_hour": 1200,
-            "default_rate_limit_per_day": 12000,
-            "default_monthly_quota": 600,
-        }
-
-        success, response, resp_data = self._make_request("PUT", f"/admin/users/{target_username}/quota/update/", token=token, data=data)
-
-        if self._assert_success(success, response, f"Update quota for user '{target_username}'", 200):
-            self.logger.info(f"  Max API Keys: 15")
-            self.logger.info(f"  Monthly Quota: 2000")
-            self.logger.info(f"  Default Rate Limits: 120/min, 1200/hr, 12000/day")
-            return True
-
-        return False
-
-    def test_list_all_api_keys(self, admin_username: str) -> bool:
-        """Test admin listing all API keys across all users."""
-        self._print_section(f"ADMIN: LIST ALL API KEYS")
-
-        token = self.user_tokens.get(admin_username, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for admin {admin_username}")
-            self.test_results["failed"] += 1
-            return False
-
-        params = {"page": 1, "limit": 10}
-
-        success, response, resp_data = self._make_request("GET", "/admin/api-keys/", token=token, params=params)
-
-        if self._assert_success(success, response, f"List all API keys", 200):
-            if resp_data and "api_keys" in resp_data:
-                keys = resp_data["api_keys"]
-                self.logger.info(f"  Total API Keys: {len(keys)}")
-                for key in keys[:3]:
-                    self.logger.info(f"    - {key.get('name')} (User: {key.get('username')}): {key.get('status')}")
-                return True
-
-        return False
-
-    def test_admin_update_api_key(self, admin_username: str, key_name: str) -> bool:
-        """Test admin updating any user's API key."""
-        self._print_section(f"ADMIN: UPDATE ANY API KEY - {key_name}")
-
-        admin_token = self.user_tokens.get(admin_username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not admin_token or not key_id:
-            self.logger.error(f"Missing admin token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        data = {"status": "active", "rate_limit_per_minute": 200}
-
-        success, response, resp_data = self._make_request("PUT", f"/admin/api-keys/{key_id}/update/", token=admin_token, data=data)
-
-        if self._assert_success(success, response, f"Admin update API key '{key_name}'", 200):
-            self.logger.info(f"  Status: active")
-            self.logger.info(f"  Rate limit: 200/min")
-            return True
-
-        return False
-
-    def test_vton_virtual_tryon(self) -> bool:
-        """Test virtual try-on processing (requires image files)."""
-        self._print_section("VTON VIRTUAL TRY-ON TEST")
-
-        # Note: This test requires actual image files to work properly
-        # For now, we'll test the endpoint structure and error handling
-        self.logger.info("  Note: This test requires person_image and clothing_image files")
-        self.logger.info("  Skipping actual file upload test - would need test images")
-
-        # Test with missing files to verify error handling
-        success, response, resp_data = self._make_request("POST", "/virtual-tryon/process/", base_url=f"{self.base_url}/api/v1")
-
-        # We expect this to fail due to missing files
-        if response and response.status_code in [400, 415]:
-            self.logger.info(f"  ✓ Endpoint responded correctly to missing files (status: {response.status_code})")
-            self.test_results["passed"] += 1
-            return True
-        else:
-            self.logger.error(f"  ✗ Unexpected response for missing files: {response.status_code if response else 'No response'}")
-            self.test_results["failed"] += 1
-            return False
-
-    def test_vton_get_request_status(self) -> bool:
-        """Test getting VTON request status."""
-        self._print_section("VTON GET REQUEST STATUS TEST")
-
-        # Use a dummy UUID to test the endpoint
-        dummy_request_id = "12345678-1234-5678-9012-123456789012"
-
-        success, response, resp_data = self._make_request("GET", f"/virtual-tryon/{dummy_request_id}/status/", base_url=f"{self.base_url}/api/v1")
-
-        # We expect this to return 404 for non-existent request
-        if response and response.status_code == 404:
-            self.logger.info(f"  ✓ Endpoint correctly returned 404 for non-existent request")
-            self.test_results["passed"] += 1
-            return True
-        else:
-            self.logger.error(f"  ✗ Unexpected response: {response.status_code if response else 'No response'}")
-            self.test_results["failed"] += 1
-            return False
-
-    def test_vton_list_requests(self) -> bool:
-        """Test listing VTON requests."""
-        self._print_section("VTON LIST REQUESTS TEST")
-
-        success, response, resp_data = self._make_request("GET", "/virtual-tryon/requests/", base_url=f"{self.base_url}/api/v1")
-
-        if self._assert_success(success, response, "List VTON requests", 200):
-            if resp_data and "requests" in resp_data:
-                requests_list = resp_data["requests"]
-                self.logger.info(f"  Total Requests: {len(requests_list)}")
-                self.logger.info(f"  Count: {resp_data.get('count', 'N/A')}")
-                return True
-
-        return False
-
-    def test_admin_delete_api_key(self, admin_username: str, key_name: str) -> bool:
-        """Test admin deleting any user's API key."""
-        self._print_section(f"ADMIN: DELETE ANY API KEY - {key_name}")
-
-        admin_token = self.user_tokens.get(admin_username, {}).get("access")
-        key_id = self.api_keys.get(key_name)
-
-        if not admin_token or not key_id:
-            self.logger.error(f"Missing admin token or key_id")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("DELETE", f"/admin/api-keys/{key_id}/delete/", token=admin_token)
-
-        if self._assert_success(success, response, f"Admin delete API key '{key_name}'", 200):
-            if key_name in self.api_keys:
-                del self.api_keys[key_name]
-            self.logger.info(f"  API key deleted successfully")
-            return True
-
-        return False
-
-    # ==================== PERMISSION TESTS ====================
-
-    def test_non_admin_cannot_access_admin_endpoints(self, regular_user: str) -> bool:
-        """Test that non-admin users cannot access admin endpoints."""
-        self._print_section(f"PERMISSION TEST: Non-admin access denied")
-
-        token = self.user_tokens.get(regular_user, {}).get("access")
-        if not token:
-            self.logger.error(f"No token found for user {regular_user}")
-            self.test_results["failed"] += 1
-            return False
-
-        success, response, resp_data = self._make_request("GET", "/admin/users/quotas/", token=token)
-
-        # We expect this to fail with 403 Forbidden
-        if response is not None:
-            if response.status_code == 403:
-                self.logger.info(f"✓ Non-admin access denied to admin endpoint (403 Forbidden)")
-                self.test_results["passed"] += 1
-                return True
-            else:
-                self.logger.error(f"✗ Non-admin should not access admin endpoint (got {response.status_code})")
-                self.test_results["failed"] += 1
-                return False
-        else:
-            self.logger.error(f"✗ Request failed - no response object")
-            self.test_results["failed"] += 1
-            return False
-
-    # ==================== TEST EXECUTION ====================
-
-    def run_full_test_suite(self):
-        """Run the complete test suite."""
-        self.logger.info(f"{Fore.CYAN}{'='*70}")
-        self.logger.info(f"{'STARTING FULL TEST SUITE':^70}")
-        self.logger.info(f"{'='*70}{Style.RESET_ALL}\n")
-
-        # Test users
-        test_user = f"testuser_{int(time.time())}"
-        test_user_email = f"{test_user}@test.local"
-
-        # ==================== AUTHENTICATION TESTS ====================
-        self._print_section("AUTHENTICATION TESTS")
-
-        # User registration and login
-        if not self.test_user_registration(test_user, test_user_email):
-            self.logger.warning("User registration failed, cannot continue with user flow tests")
-            self.logger.warning("Note: Check if server is running: python manage.py runserver")
-        else:
-            # User login
-            if self.test_user_login(test_user, "TestPass123!"):
-                # Get user info
-                self.test_get_user_info(test_user)
-
-                # Update profile
-                self.test_update_user_profile(test_user)
-
-                # Change password
-                self.test_change_password(test_user)
-
-                # Test token refresh
-                self.test_token_refresh(test_user)
-
-                # Get user quota
-                self.test_get_user_quota(test_user)
-
-                # Create multiple API keys
-                self.logger.info("\n--- Creating multiple API keys ---\n")
-                self.test_create_api_key(test_user, "production-key")
-                time.sleep(0.5)  # Small delay to avoid conflicts
-                self.test_create_api_key(test_user, "staging-key")
-
-                # List API keys
-                self.test_list_api_keys(test_user)
-
-                # Get API key details
-                if "production-key" in self.api_keys:
-                    self.logger.info("\n--- Testing production-key operations ---\n")
-                    self.test_get_api_key_detail(test_user, "production-key")
-
-                    # Update API key
-                    self.test_update_api_key(test_user, "production-key", "inactive")
-
-                    # Get API key stats
-                    self.test_get_api_key_stats(test_user, "production-key")
-
-                    # Regenerate API key
-                    self.test_regenerate_api_key(test_user, "production-key")
-
-                # Cleanup
-                self.logger.info("\n--- Cleanup: Deleting test API keys ---\n")
-                if "production-key" in self.api_keys:
-                    self.test_delete_api_key(test_user, "production-key")
-                if "staging-key" in self.api_keys:
-                    self.test_delete_api_key(test_user, "staging-key")
-
-                # Test logout
-                self.test_user_logout(test_user)
-
-                # Test account deletion (commented out to avoid deleting test user)
-                # self.test_delete_account(test_user)
-
-        # ==================== PERMISSION TESTS ====================
-        self._print_section("PERMISSION TESTS")
-
-        if test_user in self.user_tokens:
-            self.test_non_admin_cannot_access_admin_endpoints(test_user)
-
-        # ==================== ADMIN FLOW ====================
-        # Note: These tests require actual admin user (superuser)
-        # You can create one with: python manage.py createsuperuser
-        admin_user = "admin"  # Default Django admin
-        admin_password = "admin"  # Change this to your actual admin password
-
-        self._print_section("ADMIN FLOW - Testing admin endpoints")
-        self.logger.info("NOTE: To properly test admin endpoints, create a superuser:")
-        self.logger.info("  python manage.py createsuperuser")
-        self.logger.info("  Then update the admin credentials in this script")
-        self.logger.info("  Current test will skip admin tests if superuser not available\n")
-
-        # Try to login as admin (this might fail if superuser doesn't exist)
-        if self.test_user_login(admin_user, admin_password):
-            admin_token = self.user_tokens.get(admin_user, {})
-            if admin_token.get("user_type") in ["admin", "staff"]:
-                self.test_list_all_users_quotas(admin_user)
-                if test_user in self.test_users:
-                    self.test_search_users(admin_user, test_user)
-                    self.test_get_user_details(admin_user, test_user)
-                    self.test_admin_get_user_quota(admin_user, test_user)
-                    self.test_update_user_quota(admin_user, test_user)
-                self.test_list_all_api_keys(admin_user)
-            else:
-                self.logger.warning(f"Logged in as {admin_user} but user is not admin (type: {admin_token.get('user_type')})")
-        else:
-            self.logger.info("Skipping admin tests - admin user login failed")
-
-        # ==================== GENERAL ENDPOINTS TESTS ====================
-        self._print_section("GENERAL ENDPOINTS TESTS")
-
-        self.test_healthcheck()
-        self.test_homepage()
-
-        # ==================== VTON ENDPOINTS TESTS ====================
-        self._print_section("VTON ENDPOINTS TESTS")
-
-        self.test_vton_list_requests()
-        self.test_vton_get_request_status()
-        self.test_vton_virtual_tryon()
-
-        # ==================== SUMMARY ====================
-        self._print_section("TEST SUMMARY")
-        self._print_summary()
-
-    def _print_summary(self):
-        """Print test execution summary."""
-        total_tests = self.test_results["passed"] + self.test_results["failed"]
-        pass_rate = (self.test_results["passed"] / total_tests * 100) if total_tests > 0 else 0
-
-        self.logger.info(f"Total Tests: {total_tests}")
-        self.logger.info(f"Passed: {Fore.GREEN}{self.test_results['passed']}{Style.RESET_ALL}")
-        self.logger.info(f"Failed: {Fore.RED}{self.test_results['failed']}{Style.RESET_ALL}")
-        self.logger.info(f"Pass Rate: {pass_rate:.1f}%\n")
-
-        if self.test_results["errors"]:
-            self.logger.warning(f"Errors encountered ({len(self.test_results['errors'])}):")
-            for error in self.test_results["errors"][:5]:
-                self.logger.warning(f"  - {error}")
-            if len(self.test_results["errors"]) > 5:
-                self.logger.warning(f"  ... and {len(self.test_results['errors']) - 5} more")
-
-        self.logger.info(f"\n{'='*70}")
-        self.logger.info(f"Test execution completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        log_file = os.path.join(os.path.dirname(__file__), "..", "logs", "api_test_results.log")
-        self.logger.info(f"Full results logged to: {log_file}")
-        self.logger.info(f"{'='*70}\n")
-
-        # Also log summary to file with better formatting
-        file_logger = logging.getLogger("APITestSuite")
-        file_logger.info("\n" + "=" * 60)
-        file_logger.info("TEST SUMMARY")
-        file_logger.info("=" * 60)
-        file_logger.info(f"Total Tests: {total_tests}")
-        file_logger.info(f"Passed:      {self.test_results['passed']}")
-        file_logger.info(f"Failed:      {self.test_results['failed']}")
-        file_logger.info(f"Pass Rate:   {pass_rate:.1f}%")
-        file_logger.info(f"Completed:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        file_logger.info("=" * 60)
-
-
-def main():
-    """Main entry point for the test suite."""
-    parser = argparse.ArgumentParser(
-        description="API Endpoint Test Suite for API Key Management System",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python test_endpoints.py
-  python test_endpoints.py --base-url http://localhost:8000 --verbose
-  python test_endpoints.py -v
-        """,
-    )
-    parser.add_argument("--base-url", default="http://localhost:8000", help="Base URL of the API (default: http://localhost:8000)")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
-
-    args = parser.parse_args()
-
-    # Verify API is reachable
     try:
-        response = requests.get(f"{args.base_url}/internal/api/auth/me/", timeout=5)
-    except requests.exceptions.ConnectionError:
-        print(f"{Fore.RED}Error: Cannot connect to API at {args.base_url}")
-        print(f"Make sure the Django development server is running:{Style.RESET_ALL}")
-        print(f"  cd VTON_APP")
-        print(f"  python manage.py runserver\n")
-        sys.exit(1)
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+        elif method == "POST":
+            response = requests.post(url, json=data, headers=headers, timeout=10)
+        elif method == "PUT":
+            response = requests.put(url, json=data, headers=headers, timeout=10)
+        elif method == "PATCH":
+            response = requests.patch(url, json=data, headers=headers, timeout=10)
+        elif method == "DELETE":
+            response = requests.delete(url, headers=headers, timeout=10)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
 
-    # Run test suite
-    suite = APITestSuite(base_url=args.base_url, verbose=args.verbose)
-    suite.run_full_test_suite()
+        response_data = _log_response(logger, response, endpoint)
+        success = 200 <= response.status_code < 300
+
+        return success, response, response_data
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request failed: {str(e)}")
+        return False, None, None
+
+
+def log_section(logger, title: str):
+    """Print a formatted section header."""
+    if COLORS_AVAILABLE:
+        logger.info(f"\n{Fore.CYAN}{Back.BLACK}{'='*70}")
+        logger.info(f"{title.center(70)}")
+        logger.info(f"{'='*70}{Style.RESET_ALL}\n")
+    else:
+        logger.info(f"\n{'='*70}")
+        logger.info(f"{title.center(70)}")
+        logger.info(f"{'='*70}\n")
+
+    # Also log section to file
+    logging.getLogger("APITestSuite").info(f"\n[SECTION] {title}")
+    logging.getLogger("APITestSuite").info("-" * 60)
+
+
+# ==================== AUTHENTICATION TESTS ====================
+
+
+def test_user_registration(internal_api_url, logger, test_data):
+    """Test user registration."""
+    log_section(logger, "USER REGISTRATION TEST")
+
+    username = f"testuser_{int(time.time())}"
+    email = f"{username}@test.local"
+
+    data = {
+        "username": username,
+        "email": email,
+        "password": "TestPass123!",
+        "password2": "TestPass123!",
+        "first_name": "Test",
+        "last_name": "User",
+    }
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/register/", data=data)
+
+    assert success, f"Registration failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}"
+
+    test_data["test_users"][username] = {"email": email, "password": "TestPass123!", "username": username}
+    logger.info(f"  User email: {email}")
+
+
+def test_admin_login(internal_api_url, logger, test_data):
+    """Test admin user login."""
+    log_section(logger, "ADMIN LOGIN TEST")
+
+    # Login with admin credentials
+    admin_username = "admin"
+    admin_password = "admin"
+
+    data = {"username": admin_username, "password": admin_password}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/login/", data=data)
+
+    # Store admin credentials even if login fails (for later tests to skip appropriately)
+    if success and response.status_code == 200 and resp_data and "access" in resp_data:
+        test_data["user_tokens"][admin_username] = {
+            "access": resp_data["access"],
+            "refresh": resp_data.get("refresh"),
+            "user_type": resp_data.get("user_type", "admin"),
+        }
+        logger.info(f"  Admin user type: {test_data['user_tokens'][admin_username].get('user_type')}")
+        logger.info("  Admin access token obtained")
+    else:
+        logger.warning("  Admin login failed - admin tests will be skipped")
+
+
+def test_user_login(internal_api_url, logger, test_data):
+    """Test user login and token retrieval."""
+    log_section(logger, "USER LOGIN TEST")
+
+    # Get the first test user
+    username = list(test_data["test_users"].keys())[0]
+    password = test_data["test_users"][username]["password"]
+
+    data = {"username": username, "password": password}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/login/", data=data)
+
+    assert success, f"Login failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "access" in resp_data, "Access token not found in response"
+
+    test_data["user_tokens"][username] = {
+        "access": resp_data["access"],
+        "refresh": resp_data.get("refresh"),
+        "user_type": resp_data.get("user_type", "customer"),
+    }
+    logger.info(f"  User type: {test_data['user_tokens'][username].get('user_type')}")
+    logger.info("  Access token obtained")
+
+
+def test_token_refresh(internal_api_url, logger, test_data):
+    """Test JWT token refresh."""
+    log_section(logger, "TOKEN REFRESH TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("refresh")
+    assert token, f"No refresh token found for user {username}"
+
+    data = {"refresh": token}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/token/refresh/", data=data)
+
+    assert success, f"Token refresh failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "access" in resp_data, "New access token not found in response"
+
+    # Update stored tokens
+    test_data["user_tokens"][username]["access"] = resp_data["access"]
+    test_data["user_tokens"][username]["refresh"] = resp_data.get("refresh", token)
+    logger.info("  New access token obtained")
+
+
+def test_get_user_info(internal_api_url, logger, test_data):
+    """Test getting current user information."""
+    log_section(logger, "GET USER INFO TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/auth/me/", token=token)
+
+    assert success, f"Get user info failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "user" in resp_data, "User data not found in response"
+
+    user_info = resp_data["user"]
+    logger.info(f"  Username: {user_info.get('username')}")
+    logger.info(f"  Email: {user_info.get('email')}")
+    logger.info(f"  User type: {user_info.get('user_type')}")
+
+
+def test_update_user_profile(internal_api_url, logger, test_data):
+    """Test updating user profile."""
+    log_section(logger, "UPDATE USER PROFILE TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    data = {"first_name": "Updated", "last_name": "TestUser", "phone_number": "+1234567890"}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "PUT", "/auth/profile/", token=token, data=data)
+
+    assert success, f"Update profile failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  Profile updated successfully")
+
+
+def test_change_password(internal_api_url, logger, test_data):
+    """Test changing user password."""
+    log_section(logger, "CHANGE PASSWORD TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    data = {"old_password": "TestPass123!", "new_password": "NewTestPass123!", "new_password2": "NewTestPass123!"}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/change-password/", token=token, data=data)
+
+    assert success, f"Change password failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    # Update stored password for future tests
+    test_data["test_users"][username]["password"] = "NewTestPass123!"
+    logger.info("  Password changed successfully")
+
+
+def test_user_logout(internal_api_url, logger, test_data):
+    """Test user logout."""
+    log_section(logger, "USER LOGOUT TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    refresh_token = test_data["user_tokens"][username].get("refresh")
+    access_token = test_data["user_tokens"][username].get("access")
+    assert refresh_token, f"No refresh token found for user {username}"
+
+    data = {"refresh": refresh_token}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/logout/", token=access_token, data=data)
+
+    assert success, f"Logout failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  User logged out successfully")
+
+
+# ==================== USER QUOTA TESTS ====================
+
+
+def test_get_user_quota(internal_api_url, logger, test_data):
+    """Test retrieving user's quota information."""
+    log_section(logger, "GET USER QUOTA")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/quota/me/", token=token)
+
+    assert success, f"Get quota failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "quota_info" in resp_data, "Quota info not found in response"
+
+    quota = resp_data["quota_info"]
+    logger.info(f"  Max API Keys: {quota.get('max_api_keys')}")
+    logger.info(f"  Current API Keys: {quota.get('current_api_keys')}")
+    logger.info(f"  Can Create More: {quota.get('can_create_more')}")
+    logger.info(f"  Monthly Quota Remaining: {quota.get('quota_remaining')}")
+    logger.info(f"  API key generation enabled: {quota.get('api_key_generation_enabled')}")
+
+
+# ==================== API KEY MANAGEMENT TESTS ====================
+
+
+@pytest.mark.parametrize("key_name", ["production-key", "staging-key"])
+def test_create_api_key(internal_api_url, logger, test_data, key_name):
+    """Test creating a new API key."""
+    log_section(logger, f"CREATE API KEY - {key_name}")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    data = {"name": key_name, "rate_limit_per_minute": 100, "rate_limit_per_hour": 1000, "rate_limit_per_day": 10000, "monthly_quota": 500}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=token, data=data)
+
+    assert success, f"Create API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}"
+    assert resp_data and "api_key" in resp_data, "API key data not found in response"
+
+    key_id = resp_data["api_key"].get("key_id")
+    test_data["api_keys"][key_name] = key_id
+    logger.info(f"  Key ID: {key_id}")
+    logger.info(f"  Name: {resp_data['api_key'].get('name')}")
+    logger.info(f"  Status: {resp_data['api_key'].get('status')}")
+
+    time.sleep(0.5)  # Small delay to avoid conflicts
+
+
+def test_list_api_keys(internal_api_url, logger, test_data):
+    """Test listing user's API keys."""
+    log_section(logger, "LIST API KEYS")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/api-keys/", token=token)
+
+    assert success, f"List API keys failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "api_keys" in resp_data, "API keys list not found in response"
+
+    keys = resp_data["api_keys"]
+    logger.info(f"  Total API Keys: {len(keys)}")
+    pagination = resp_data.get("pagination", {})
+    logger.info(f"  Pagination: Page {pagination.get('page')}/{pagination.get('pages')}")
+    for key in keys[:5]:
+        logger.info(f"    - {key.get('name')}: {key.get('status')}")
+
+
+def test_get_api_key_detail(internal_api_url, logger, test_data):
+    """Test getting detailed information about an API key."""
+    log_section(logger, "GET API KEY DETAIL")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    key_name = "production-key"
+    key_id = test_data["api_keys"].get(key_name)
+    assert token, f"No token found for user {username}"
+    assert key_id, f"No key_id found for {key_name}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/", token=token)
+
+    assert success, f"Get API key detail failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "api_key" in resp_data, "API key detail not found in response"
+
+    key = resp_data["api_key"]
+    logger.info(f"  Name: {key.get('name')}")
+    logger.info(f"  Status: {key.get('status')}")
+    logger.info(f"  Rate Limits: {key.get('rate_limit_per_minute')}/min, {key.get('rate_limit_per_hour')}/hr, {key.get('rate_limit_per_day')}/day")
+    logger.info(f"  Monthly Quota: {key.get('monthly_quota')}")
+    logger.info(f"  Created: {key.get('created_at')}")
+
+
+def test_update_api_key(internal_api_url, logger, test_data):
+    """Test updating an API key."""
+    log_section(logger, "UPDATE API KEY")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    key_name = "production-key"
+    key_id = test_data["api_keys"].get(key_name)
+    assert token, f"No token found for user {username}"
+    assert key_id, f"No key_id found for {key_name}"
+
+    data = {"status": "inactive"}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "PUT", f"/api-keys/{key_id}/update/", token=token, data=data)
+
+    assert success, f"Update API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  Status updated to: inactive")
+
+
+def test_regenerate_api_key(internal_api_url, logger, test_data):
+    """Test regenerating an API key."""
+    log_section(logger, "REGENERATE API KEY")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    key_name = "production-key"
+    key_id = test_data["api_keys"].get(key_name)
+    assert token, f"No token found for user {username}"
+    assert key_id, f"No key_id found for {key_name}"
+
+    data = {"confirm": True}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", f"/api-keys/{key_id}/regenerate/", token=token, data=data)
+
+    assert success, f"Regenerate API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  New API key generated (shown once)")
+
+
+def test_get_api_key_stats(internal_api_url, logger, test_data):
+    """Test getting API key usage statistics."""
+    log_section(logger, "GET API KEY STATS")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    key_name = "production-key"
+    key_id = test_data["api_keys"].get(key_name)
+    assert token, f"No token found for user {username}"
+    assert key_id, f"No key_id found for {key_name}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/stats/", token=token)
+
+    assert success, f"Get API key stats failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "stats" in resp_data, "Stats not found in response"
+
+    stats = resp_data["stats"]
+    logger.info(f"  Total Requests: {stats.get('total_requests', 0)}")
+    logger.info(f"  Requests This Month: {stats.get('requests_this_month', 0)}")
+    logger.info(f"  Requests Today: {stats.get('requests_today', 0)}")
+    logger.info(f"  Quota Remaining: {stats.get('quota_remaining', 0)}")
+
+
+@pytest.mark.parametrize("key_name", ["production-key", "staging-key"])
+def test_delete_api_key(internal_api_url, logger, test_data, key_name):
+    """Test deleting an API key."""
+    log_section(logger, f"DELETE API KEY - {key_name}")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    key_id = test_data["api_keys"].get(key_name)
+    assert token, f"No token found for user {username}"
+    assert key_id, f"No key_id found for {key_name}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "DELETE", f"/api-keys/{key_id}/delete/", token=token)
+
+    assert success, f"Delete API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    if key_name in test_data["api_keys"]:
+        del test_data["api_keys"][key_name]
+    logger.info("  API key deleted successfully")
+
+
+# ==================== ADMIN TESTS ====================
+
+
+def test_list_all_users_quotas(internal_api_url, logger, test_data):
+    """Test admin listing all users with quotas."""
+    log_section(logger, "ADMIN: LIST ALL USERS QUOTAS")
+
+    # Try to find admin user in test_data, if not, skip
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    params = {"page": 1, "limit": 10}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/users/quotas/", token=token, params=params)
+
+    assert success, f"List all users quotas failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "users" in resp_data, "Users list not found in response"
+
+    users = resp_data["users"]
+    logger.info(f"  Total Users Fetched: {len(users)}")
+    for user in users[:3]:
+        logger.info(f"    - {user.get('username')}: {user.get('current_api_keys')}/{user.get('max_api_keys')} keys")
+
+
+def test_search_users(internal_api_url, logger, test_data):
+    """Test admin searching for users."""
+    log_section(logger, "ADMIN: SEARCH USERS")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    search_query = list(test_data["test_users"].keys())[0]  # Search for the test user
+    params = {"q": search_query, "page": 1, "limit": 10}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/users/search/", token=token, params=params)
+
+    assert success, f"Search users failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "users" in resp_data, "Users search results not found in response"
+
+    users = resp_data["users"]
+    logger.info(f"  Search Results: {len(users)} user(s) found")
+    for user in users[:5]:
+        logger.info(f"    - {user.get('username')} ({user.get('email')})")
+
+
+def test_get_user_details(internal_api_url, logger, test_data):
+    """Test admin getting comprehensive user details."""
+    log_section(logger, "ADMIN: GET USER DETAILS")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    target_username = list(test_data["test_users"].keys())[0]
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/admin/users/{target_username}/details/", token=token)
+
+    assert success, f"Get user details failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "user_details" in resp_data, "User details not found in response"
+
+    details = resp_data["user_details"]
+    user_info = details.get("user_info", {})
+    quota_info = details.get("quota_info", {})
+    activity = details.get("activity_summary", {})
+
+    logger.info("  User Info:")
+    logger.info(f"    - Username: {user_info.get('username')}")
+    logger.info(f"    - Email: {user_info.get('email')}")
+    logger.info(f"    - Type: {user_info.get('user_type')}")
+
+    logger.info("  Quota Info:")
+    logger.info(f"    - Max API Keys: {quota_info.get('max_api_keys')}")
+    logger.info(f"    - Monthly Quota: {quota_info.get('user_monthly_quota')}")
+
+    logger.info("  Activity Summary:")
+    logger.info(f"    - Total API Keys: {activity.get('total_api_keys')}")
+    logger.info(f"    - Requests (Last 30 days): {activity.get('requests_last_30_days')}")
+
+
+def test_admin_get_user_quota(internal_api_url, logger, test_data):
+    """Test admin getting specific user quota."""
+    log_section(logger, "ADMIN: GET USER QUOTA")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    target_username = list(test_data["test_users"].keys())[0]
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/admin/users/{target_username}/quota/", token=token)
+
+    assert success, f"Admin get quota failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "quota_info" in resp_data, "Quota info not found in response"
+
+    quota = resp_data["quota_info"]
+    logger.info(f"  Max API Keys: {quota.get('max_api_keys')}")
+    logger.info(f"  Current API Keys: {quota.get('current_api_keys')}")
+    logger.info(f"  Monthly Quota: {quota.get('user_monthly_quota')}")
+    logger.info(f"  Can Create More: {quota.get('can_create_more')}")
+
+
+def test_update_user_quota(internal_api_url, logger, test_data):
+    """Test admin updating user quotas."""
+    log_section(logger, "ADMIN: UPDATE USER QUOTA")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    target_username = list(test_data["test_users"].keys())[0]
+
+    data = {
+        "max_api_keys": 15,
+        "user_monthly_quota": 2000,
+        "default_rate_limit_per_minute": 120,
+        "default_rate_limit_per_hour": 1200,
+        "default_rate_limit_per_day": 12000,
+        "default_monthly_quota": 600,
+    }
+
+    success, response, resp_data = make_request(internal_api_url, logger, "PUT", f"/admin/users/{target_username}/quota/update/", token=token, data=data)
+
+    assert success, f"Update quota failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  Max API Keys: 15")
+    logger.info("  Monthly Quota: 2000")
+    logger.info("  Default Rate Limits: 120/min, 1200/hr, 12000/day")
+
+
+def test_list_all_api_keys(internal_api_url, logger, test_data):
+    """Test admin listing all API keys across all users."""
+    log_section(logger, "ADMIN: LIST ALL API KEYS")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    token = test_data["user_tokens"][admin_username].get("access")
+    assert token, f"No token found for admin {admin_username}"
+
+    params = {"page": 1, "limit": 10}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/api-keys/", token=token, params=params)
+
+    assert success, f"List all API keys failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "api_keys" in resp_data, "API keys list not found in response"
+
+    keys = resp_data["api_keys"]
+    logger.info(f"  Total API Keys: {len(keys)}")
+    for key in keys[:3]:
+        logger.info(f"    - {key.get('name')} (User: {key.get('username')}): {key.get('status')}")
+
+
+def test_admin_update_api_key(internal_api_url, logger, test_data):
+    """Test admin updating any user's API key."""
+    log_section(logger, "ADMIN: UPDATE ANY API KEY")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    admin_token = test_data["user_tokens"][admin_username].get("access")
+    assert admin_token, f"No token found for admin {admin_username}"
+
+    # Find any API key to update
+    key_name = list(test_data["api_keys"].keys())[0] if test_data["api_keys"] else None
+    if not key_name:
+        pytest.skip("No API keys available for admin update test")
+
+    key_id = test_data["api_keys"][key_name]
+
+    data = {"status": "active", "rate_limit_per_minute": 200}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "PUT", f"/admin/api-keys/{key_id}/update/", token=admin_token, data=data)
+
+    assert success, f"Admin update API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  Status: active")
+    logger.info("  Rate limit: 200/min")
+
+
+def test_admin_delete_api_key(internal_api_url, logger, test_data):
+    """Test admin deleting any user's API key."""
+    log_section(logger, "ADMIN: DELETE ANY API KEY")
+
+    admin_username = None
+    for username, token_data in test_data["user_tokens"].items():
+        if token_data.get("user_type") in ["admin", "staff"]:
+            admin_username = username
+            break
+
+    if not admin_username:
+        pytest.skip("No admin user available for admin tests")
+
+    admin_token = test_data["user_tokens"][admin_username].get("access")
+    assert admin_token, f"No token found for admin {admin_username}"
+
+    # Find any API key to delete
+    key_name = list(test_data["api_keys"].keys())[0] if test_data["api_keys"] else None
+    if not key_name:
+        pytest.skip("No API keys available for admin delete test")
+
+    key_id = test_data["api_keys"][key_name]
+
+    success, response, resp_data = make_request(internal_api_url, logger, "DELETE", f"/admin/api-keys/{key_id}/delete/", token=admin_token)
+
+    assert success, f"Admin delete API key failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    if key_name in test_data["api_keys"]:
+        del test_data["api_keys"][key_name]
+    logger.info("  API key deleted successfully")
+
+
+# ==================== PERMISSION TESTS ====================
+
+
+def test_non_admin_cannot_access_admin_endpoints(internal_api_url, logger, test_data):
+    """Test that non-admin users cannot access admin endpoints."""
+    log_section(logger, "PERMISSION TEST: Non-admin access denied")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/users/quotas/", token=token)
+
+    assert response is not None, "Request failed - no response object"
+    assert response.status_code == 403, f"Non-admin should not access admin endpoint (got {response.status_code})"
+    logger.info("✓ Non-admin access denied to admin endpoint (403 Forbidden)")
+
+
+# ==================== GENERAL ENDPOINTS TESTS ====================
+
+
+def test_healthcheck(base_url, logger):
+    """Test healthcheck endpoint."""
+    log_section(logger, "HEALTHCHECK TEST")
+
+    success, response, resp_data = make_request(base_url, logger, "GET", "/api/v1/health/")
+
+    assert success, f"Healthcheck failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("✓ Healthcheck passed")
+
+
+def test_homepage(base_url, logger):
+    """Test homepage endpoint."""
+    log_section(logger, "HOMEPAGE TEST")
+
+    success, response, resp_data = make_request(base_url, logger, "GET", "/")
+
+    assert success, f"Homepage failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("✓ Homepage accessible")
+
+
+# ==================== VTON ENDPOINTS TESTS ====================
+
+
+def test_vton_list_requests(internal_api_url, logger):
+    """Test listing VTON requests."""
+    log_section(logger, "VTON LIST REQUESTS TEST")
+
+    success, response, resp_data = make_request(internal_api_url.replace("/internal/api", "/api/v1"), logger, "GET", "/virtual-tryon/requests/")
+
+    assert success, f"List VTON requests failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    assert resp_data and "requests" in resp_data, "Requests list not found in response"
+
+    requests_list = resp_data["requests"]
+    logger.info(f"  Total Requests: {len(requests_list)}")
+    logger.info(f"  Count: {resp_data.get('count', 'N/A')}")
+
+
+def test_vton_get_request_status(internal_api_url, logger):
+    """Test getting VTON request status."""
+    log_section(logger, "VTON GET REQUEST STATUS TEST")
+
+    # Use a dummy UUID to test the endpoint
+    dummy_request_id = "12345678-1234-5678-9012-123456789012"
+
+    success, response, resp_data = make_request(internal_api_url.replace("/internal/api", "/api/v1"), logger, "GET", f"/virtual-tryon/{dummy_request_id}/status/")
+
+    # We expect this to return 404 for non-existent request
+    assert response is not None, "Request failed - no response object"
+    assert response.status_code == 404, f"Expected 404 for non-existent request, got {response.status_code}"
+    logger.info("✓ Endpoint correctly returned 404 for non-existent request")
+
+
+# Commented out VTON virtual tryon process test as requested
+# def test_vton_virtual_tryon(internal_api_url, logger):
+#     """Test virtual try-on processing (requires image files)."""
+#     log_section(logger, "VTON VIRTUAL TRY-ON TEST")
+#
+#     # Note: This test requires actual image files to work properly
+#     # For now, we'll test the endpoint structure and error handling
+#     logger.info("  Note: This test requires person_image and clothing_image files")
+#     logger.info("  Skipping actual file upload test - would need test images")
+#
+#     # Test with missing files to verify error handling
+#     success, response, resp_data = make_request(internal_api_url.replace("/internal/api", "/api/v1"), logger, "POST", "/virtual-tryon/process/")
+#
+#     # We expect this to fail due to missing files
+#     assert response is not None, "Request failed - no response object"
+#     assert response.status_code in [400, 415], f"Expected 400 or 415 for missing files, got {response.status_code}"
+#     logger.info(f"✓ Endpoint responded correctly to missing files (status: {response.status_code})")
+
+
+# ==================== CLEANUP ====================
+
+
+def test_delete_account(internal_api_url, logger, test_data):
+    """Test account deletion (soft delete)."""
+    log_section(logger, "DELETE ACCOUNT TEST")
+
+    username = list(test_data["user_tokens"].keys())[0]
+    token = test_data["user_tokens"][username].get("access")
+    assert token, f"No token found for user {username}"
+
+    password = test_data["test_users"][username]["password"]
+    data = {"password": password, "confirm": True}
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/auth/delete-account/", token=token, data=data)
+
+    assert success, f"Delete account failed with status {response.status_code if response else 'unknown'}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+    logger.info("  Account deleted successfully (soft delete)")
+
+
+# Add pytest configuration
+def pytest_configure(config):
+    """Add custom markers."""
+    config.addinivalue_line("markers", "admin: marks tests that require admin privileges")
+
+
+def pytest_addoption(parser):
+    """Add command line options."""
+    parser.addoption("--base-url", action="store", default="http://localhost:8000", help="Base URL of the API")
+    parser.addoption("--verbose", action="store_true", help="Enable verbose logging")
 
 
 if __name__ == "__main__":
-    main()
+    pytest.main([__file__, "-v"])

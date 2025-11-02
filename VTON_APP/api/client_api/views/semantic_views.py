@@ -2,7 +2,7 @@
 
 from django.shortcuts import render, get_object_or_404
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from rest_framework.response import Response
 from api.client_api.serializers import VTONSerializer, VTONResponseSerializer
 from app.models.vton_models import VTONRequest
@@ -411,8 +411,9 @@ def get_request_status(request, request_id):
 
         return create_response("VTON_STATUS_FETCHED", response_serializer.data, status.HTTP_200_OK)
 
-    except Exception as e:
-        logger.error(f"Error retrieving request {request_id}: {str(e)}", exc_info=True)
+    except Http404:
+        # Handle the expected case where request_id doesn't exist
+        logger.info(f"VTON request not found: {request_id}")
 
         # Log failed API usage
         try:
@@ -426,13 +427,37 @@ def get_request_status(request, request_id):
                 response_status_code=status.HTTP_404_NOT_FOUND,
                 response_time_ms=int(total_time * 1000),
                 is_successful=False,
-                error_message=str(e),
+                error_message=f"VTONRequest with ID {request_id} not found",
                 error_code="VTN001",
             )
         except Exception as log_error:
             logger.error(f"Error logging failed API usage: {str(log_error)}")
 
-        return create_response("VTON_REQUEST_NOT_FOUND", {"detail": str(e)}, status.HTTP_404_NOT_FOUND)
+        return create_response("VTON_REQUEST_NOT_FOUND", {"detail": f"VTONRequest with ID {request_id} not found"}, status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error(f"Unexpected error retrieving request {request_id}: {str(e)}", exc_info=True)
+
+        # Log failed API usage
+        try:
+            total_time = time.time() - request_start
+            APIUsageLog.objects.create(
+                api_key=None,
+                endpoint=request.path,
+                method=request.method,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                response_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                response_time_ms=int(total_time * 1000),
+                is_successful=False,
+                error_message=str(e),
+                error_code="SYS001",
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging failed API usage: {str(log_error)}")
+
+        return create_response("SYSTEM_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
