@@ -84,14 +84,14 @@ def setup_logger(verbose: bool = False) -> logging.Logger:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # File handler for logs - with better structure
+    # File handler for logs - with better structure and NO color codes
     log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
     os.makedirs(log_dir, exist_ok=True)
 
     file_handler = logging.FileHandler(os.path.join(log_dir, "api_test_results.log"), encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
-    # Simpler format for file with better readability
-    file_formatter = logging.Formatter(fmt="%(message)s")
+    # Plain format for file - no color codes
+    file_formatter = logging.Formatter(fmt="%(asctime)s - %(levelname)-8s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
@@ -223,6 +223,7 @@ def make_request(
 
 def log_section(logger, title: str):
     """Print a formatted section header."""
+    # Console output - with colors
     if COLORS_AVAILABLE:
         logger.info(f"\n{Fore.CYAN}{Back.BLACK}{'='*70}")
         logger.info(f"{title.center(70)}")
@@ -232,9 +233,16 @@ def log_section(logger, title: str):
         logger.info(f"{title.center(70)}")
         logger.info(f"{'='*70}\n")
 
-    # Also log section to file
-    logging.getLogger("APITestSuite").info(f"\n[SECTION] {title}")
-    logging.getLogger("APITestSuite").info("-" * 60)
+    # File output - NO colors, write directly to file handler
+    file_logger = logging.getLogger("APITestSuite")
+    for handler in file_logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            # Write plain text section header directly to file
+            handler.stream.write(f"\n{'='*70}\n")
+            handler.stream.write(f"[SECTION] {title}\n")
+            handler.stream.write(f"{'-'*60}\n")
+            handler.stream.flush()
+            break
 
 
 # ==================== AUTHENTICATION TESTS ====================
