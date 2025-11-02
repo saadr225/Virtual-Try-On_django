@@ -3,7 +3,7 @@ __pycache__/
 db.sqlite3
 media/
 .env
-migrations/
+# migrations/
 *.pyc
 
 django.log
