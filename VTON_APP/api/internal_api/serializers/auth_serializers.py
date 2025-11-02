@@ -85,7 +85,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_premium = serializers.SerializerMethodField()
     premium_expiry = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
-    is_admin = serializers.SerializerMethodField()
+    # is_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -96,8 +96,8 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "is_active",
-            "is_staff",
-            "is_superuser",
+            # "is_staff",
+            # "is_superuser",
             "date_joined",
             "last_login",
             "user_type",
@@ -105,7 +105,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_premium",
             "premium_expiry",
             "phone_number",
-            "is_admin",
+            # "is_admin",
         ]
         read_only_fields = ["id", "username", "date_joined", "last_login", "is_staff", "is_superuser"]
 

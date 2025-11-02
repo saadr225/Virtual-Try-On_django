@@ -297,6 +297,184 @@ def login_view(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def admin_login_view(request):
+    """
+    Authenticate admin users ONLY and return JWT tokens.
+
+    This endpoint is specifically for admin users (staff, superuser, or user_type='admin').
+    Regular users will be rejected even with valid credentials.
+
+    POST /internal/api/auth/admin-login
+
+    Request Body:
+        - username: string (required)
+        - password: string (required)
+
+    Response:
+        - user: User data object
+        - access: JWT access token (30 minutes validity)
+        - refresh: JWT refresh token (7 days validity)
+
+    Response Codes:
+        - SUC006: Login successful (admin user)
+        - USR008: Username is required
+        - USR009: Password is required
+        - AUT003: Invalid credentials
+        - AUT001: Access denied (valid user but not admin)
+        - USR015: User account is inactive
+        - AUT006: Account suspended
+        - SYS004: Validation error
+
+    Security Features:
+        - Admin-only authentication (rejects non-admin users)
+        - JWT tokens with automatic rotation on refresh
+        - Token blacklisting after logout
+        - Account suspension check
+        - Audit logging
+        - Custom claims (user_type, is_verified, is_premium)
+    """
+    serializer = LoginSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        errors = serializer.errors
+
+        if "username" in errors:
+            return create_response("USERNAME_REQUIRED", {"errors": errors}, status.HTTP_400_BAD_REQUEST)
+
+        if "password" in errors:
+            return create_response("PASSWORD_REQUIRED", {"errors": errors}, status.HTTP_400_BAD_REQUEST)
+
+        return create_response("VALIDATION_ERROR", {"errors": errors}, status.HTTP_400_BAD_REQUEST)
+
+    username = serializer.validated_data["username"]
+    password = serializer.validated_data["password"]
+
+    # Authenticate user
+    user = authenticate(request, username=username, password=password)
+
+    if user is not None:
+        # Check if account is active
+        if not user.is_active:
+            return create_response("USER_ACCOUNT_INACTIVE", http_status=status.HTTP_403_FORBIDDEN)
+
+        # Check if account is suspended
+        try:
+            user_data = user.userdata
+            if user_data.is_suspended:
+                return create_response(
+                    "ACCOUNT_SUSPENDED", {"suspension_reason": user_data.suspension_reason, "suspended_at": user_data.suspended_at}, status.HTTP_403_FORBIDDEN
+                )
+        except UserData.DoesNotExist:
+            # Create UserData if it doesn't exist
+            UserData.objects.create(user=user)
+
+        # ADMIN CHECK - Reject non-admin users
+        is_admin = False
+
+        # Check Django admin status
+        if user.is_staff or user.is_superuser:
+            is_admin = True
+
+        # Check user_type in UserData
+        try:
+            if user.userdata.user_type == "admin":
+                is_admin = True
+        except UserData.DoesNotExist:
+            pass
+
+        if not is_admin:
+            # Log failed admin login attempt (valid user but not admin)
+            AuditLog.objects.create(
+                user=user,
+                action="admin_login_denied",
+                resource_type="User",
+                resource_id=str(user.id),
+                description=f"Non-admin user {username} attempted to login via admin endpoint",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+
+            logger.warning(f"Non-admin user attempted admin login: {username}")
+
+            return create_response(
+                "ACCESS_DENIED", {"detail": "This endpoint is for admin users only. Please use the regular login endpoint."}, http_status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Generate JWT tokens for admin user
+        refresh = RefreshToken.for_user(user)
+
+        # Add custom claims to JWT
+        refresh["username"] = user.username
+        refresh["email"] = user.email
+        refresh["is_staff"] = user.is_staff
+        refresh["is_admin"] = True  # Explicitly mark as admin in token
+
+        try:
+            user_data = user.userdata
+            refresh["user_type"] = user_data.user_type
+            refresh["is_verified"] = user_data.is_verified
+            refresh["is_premium"] = user_data.is_premium
+        except UserData.DoesNotExist:
+            refresh["user_type"] = "customer"
+            refresh["is_verified"] = False
+            refresh["is_premium"] = False
+
+        # Update last login in UserData
+        try:
+            user_data = user.userdata
+            user_data.last_login_at = timezone.now()
+            user_data.save(update_fields=["last_login_at"])
+        except UserData.DoesNotExist:
+            UserData.objects.create(user=user, last_login_at=timezone.now())
+
+        # Log admin login
+        AuditLog.objects.create(
+            user=user,
+            action="admin_login",
+            resource_type="User",
+            resource_id=str(user.id),
+            description=f"Admin user {user.username} logged in via admin endpoint",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+
+        logger.info(f"Admin user logged in: {user.username}")
+
+        # Return user data with JWT tokens
+        user_serializer = UserSerializer(user)
+
+        return create_response(
+            "LOGIN_SUCCESS",
+            {
+                "user": user_serializer.data,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status.HTTP_200_OK,
+        )
+    else:
+        # Log failed login attempt
+        try:
+            failed_user = User.objects.filter(username=username).first()
+            if failed_user:
+                AuditLog.objects.create(
+                    user=failed_user,
+                    action="admin_login_failed",
+                    resource_type="User",
+                    resource_id=str(failed_user.id),
+                    description=f"Failed admin login attempt for user {username}",
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                )
+        except Exception as e:
+            logger.error(f"Error logging failed admin login: {str(e)}")
+
+        return create_response("INVALID_CREDENTIALS", http_status=status.HTTP_401_UNAUTHORIZED)
+
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @csrf_exempt
 def logout_view(request):

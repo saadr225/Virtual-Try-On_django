@@ -33,7 +33,10 @@ paths:
       tags:
         - Health
       summary: Health Check
-      description: Check the health status of the API service
+      description: |
+        Check the health status of the API service.
+        Returns system metrics including uptime, CPU, and memory usage.
+        This endpoint does not require authentication.
       operationId: healthcheck
       security: []
       responses:
@@ -43,6 +46,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthCheckResponse"
+              example:
+                status: "healthy"
+                timestamp: "2025-11-03T10:30:00Z"
+                uptime: "5 days, 3:45:12"
+                cpu_usage_percent: 25.5
+                memory_usage_percent: 60.2
+                total_memory_gb: 16.0
+                available_memory_gb: 6.37
 
   /virtual-tryon/process/:
     post:
@@ -51,8 +62,24 @@ paths:
       summary: Process Virtual Try-On Request
       description: |
         Submit a virtual try-on request with person and clothing images.
-        Processing typically takes 30-120 seconds.
+
+        **Processing Flow:**
+        1. Validates and saves uploaded images
+        2. Creates a database record to track the request
+        3. Processes images through the VTON AI model
+        4. Saves the result image
+        5. Returns public URLs for all images with status
+
+        **Processing Time:** Typically takes 30-120 seconds depending on image sizes and server load.
+
+        **Image Requirements:**
+        - Supported formats: JPG, JPEG, PNG
+        - Maximum file size: 10MB per image
+        - Recommended resolution: 512x512 to 1024x1024 pixels
+
+        **Authentication:** Currently allows public access. API key authentication will be required in production.
       operationId: processVirtualTryon
+      security: []
       requestBody:
         required: true
         content:
@@ -73,8 +100,9 @@ paths:
                   description: Image of the clothing item (JPG, PNG, max 10MB)
                 instructions:
                   type: string
-                  description: Optional processing instructions
+                  description: Optional processing instructions or preferences
                   maxLength: 500
+                  example: "Ensure the clothing fits naturally"
       responses:
         "200":
           description: VTON request processed successfully
@@ -82,14 +110,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VTONResponse"
+              examples:
+                success:
+                  summary: Successful processing
+                  value:
+                    code: "VTON_REQUEST_COMPLETED"
+                    message: "Virtual try-on request completed successfully"
+                    request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "completed"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                    result_image_url: "http://localhost:8000/media/vton/output/result_def456.jpg"
+                    created_at: "2025-11-03T10:00:00Z"
+                    processing_started_at: "2025-11-03T10:00:01Z"
+                    processing_completed_at: "2025-11-03T10:01:15Z"
+                    processing_duration_seconds: 74.5
+                    person_image_size: 524288
+                    clothing_image_size: 612352
+                    result_image_size: 735821
+                    error_message: null
         "400":
           description: Invalid request parameters
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation:
+                  summary: Validation error
+                  value:
+                    code: "VTN010"
+                    message: "Invalid VTON request parameters"
+                    errors:
+                      person_image: ["Person image is required."]
+                missingImages:
+                  summary: Missing required images
+                  value:
+                    code: "VTN010"
+                    message: "Invalid VTON request parameters"
+                    errors:
+                      person_image: ["Person image is required."]
+                      clothing_image: ["Clothing image is required."]
         "401":
-          description: Invalid or missing API key
+          description: Invalid or missing API key (when authentication is enabled)
           content:
             application/json:
               schema:
@@ -106,14 +169,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VTONResponse"
+              examples:
+                processingError:
+                  summary: Processing failed but images were saved
+                  value:
+                    code: "VTON_PROCESSING_ERROR"
+                    message: "VTON processing error"
+                    request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "failed"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                    result_image_url: null
+                    created_at: "2025-11-03T10:00:00Z"
+                    processing_started_at: "2025-11-03T10:00:01Z"
+                    processing_completed_at: "2025-11-03T10:00:45Z"
+                    processing_duration_seconds: 44.2
+                    person_image_size: 524288
+                    clothing_image_size: 612352
+                    result_image_size: null
+                    error_message: "Failed to process images: AI model returned error"
 
   /virtual-tryon/{request_id}/status/:
     get:
       tags:
         - Virtual Try-On
       summary: Get Request Status
-      description: Retrieve the status and details of a specific VTON request
+      description: |
+        Retrieve the status and details of a specific VTON request by its UUID.
+
+        **Use Cases:**
+        - Poll for completion of long-running requests
+        - Retrieve result URLs after processing
+        - Check error messages for failed requests
+        - Access request metadata and timing information
+
+        **Status Values:**
+        - `pending`: Request created, waiting to start
+        - `processing`: Currently being processed
+        - `completed`: Successfully processed with result image
+        - `failed`: Processing failed, check error_message
+        - `cancelled`: Request was cancelled
       operationId: getRequestStatus
+      security: []
       parameters:
         - name: request_id
           in: path
@@ -122,6 +219,7 @@ paths:
           schema:
             type: string
             format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "200":
           description: Request status retrieved successfully
@@ -129,20 +227,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VTONStatusResponse"
+              examples:
+                completed:
+                  summary: Completed request
+                  value:
+                    code: "VTON_STATUS_FETCHED"
+                    message: "VTON status fetched successfully"
+                    request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "completed"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                    result_image_url: "http://localhost:8000/media/vton/output/result_def456.jpg"
+                    created_at: "2025-11-03T10:00:00Z"
+                    processing_duration_seconds: 74.5
+                processing:
+                  summary: Request still processing
+                  value:
+                    code: "VTON_STATUS_FETCHED"
+                    message: "VTON status fetched successfully"
+                    request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "processing"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                    result_image_url: null
+                    created_at: "2025-11-03T10:00:00Z"
+                    processing_duration_seconds: null
         "404":
           description: Request not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "VTON_REQUEST_NOT_FOUND"
+                message: "VTON request not found"
+                detail: "VTONRequest with ID 550e8400-e29b-41d4-a716-446655440000 not found"
 
   /virtual-tryon/requests/:
     get:
       tags:
         - Virtual Try-On
       summary: List Recent Requests
-      description: List recent VTON requests with optional filtering
+      description: |
+        List recent VTON requests with optional filtering.
+
+        **Use Cases:**
+        - View processing history
+        - Monitor request statuses
+        - Retrieve multiple requests at once
+        - Filter by status for specific workflows
+
+        **Note:** In production, this endpoint will only return requests associated with the authenticated API key.
       operationId: listRecentRequests
+      security: []
       parameters:
         - name: limit
           in: query
@@ -152,12 +289,14 @@ paths:
             minimum: 1
             maximum: 100
             default: 10
+          example: 20
         - name: status
           in: query
           description: Filter by status
           schema:
             type: string
             enum: [pending, queued, processing, completed, failed, cancelled]
+          example: completed
       responses:
         "200":
           description: Requests retrieved successfully
@@ -165,12 +304,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VTONListResponse"
+              example:
+                code: "VTON_REQUESTS_FETCHED"
+                message: "VTON requests fetched successfully"
+                requests:
+                  - request_id: "550e8400-e29b-41d4-a716-446655440000"
+                    status: "completed"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                    result_image_url: "http://localhost:8000/media/vton/output/result_def456.jpg"
+                    created_at: "2025-11-03T10:00:00Z"
+                    processing_duration_seconds: 74.5
+                  - request_id: "661f9510-f30c-52e5-b827-557766551111"
+                    status: "processing"
+                    person_image_url: "http://localhost:8000/media/vton/uploads/person_xyz987.jpg"
+                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_def654.jpg"
+                    result_image_url: null
+                    created_at: "2025-11-03T10:05:00Z"
+                    processing_duration_seconds: null
+                count: 2
         "400":
           description: Invalid query parameters
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "VALIDATION_ERROR"
+                message: "Validation error"
+                errors:
+                  status: ["Invalid status. Must be one of: pending, queued, processing, completed, failed, cancelled"]
 
 components:
   securitySchemes:
@@ -208,119 +371,211 @@ components:
 
     VTONResponse:
       type: object
+      description: Complete VTON request response with all metadata and URLs
+      required:
+        - code
+        - message
+        - request_id
+        - status
+        - person_image_url
+        - clothing_image_url
+        - created_at
       properties:
         code:
           type: string
+          description: Response code indicating success or error type
           example: VTON_REQUEST_COMPLETED
+          enum:
+            - VTON_REQUEST_COMPLETED
+            - VTON_PROCESSING_ERROR
         message:
           type: string
+          description: Human-readable message describing the response
           example: Virtual try-on request completed successfully
         request_id:
           type: string
           format: uuid
+          description: Unique identifier for this VTON request
+          example: "550e8400-e29b-41d4-a716-446655440000"
         status:
           type: string
+          description: Current processing status of the request
           enum: [pending, queued, processing, completed, failed, cancelled]
+          example: completed
         person_image_url:
           type: string
           format: uri
+          description: Public URL to access the uploaded person image
+          example: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
         clothing_image_url:
           type: string
           format: uri
+          description: Public URL to access the uploaded clothing image
+          example: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
         result_image_url:
           type: string
           format: uri
           nullable: true
+          description: Public URL to access the result image (null if not yet completed)
+          example: "http://localhost:8000/media/vton/output/result_def456.jpg"
         created_at:
           type: string
           format: date-time
+          description: ISO 8601 timestamp when the request was created
+          example: "2025-11-03T10:00:00Z"
         processing_started_at:
           type: string
           format: date-time
           nullable: true
+          description: ISO 8601 timestamp when processing started (null if not started)
+          example: "2025-11-03T10:00:01Z"
         processing_completed_at:
           type: string
           format: date-time
           nullable: true
+          description: ISO 8601 timestamp when processing completed (null if not completed)
+          example: "2025-11-03T10:01:15Z"
         processing_duration_seconds:
           type: number
           format: float
           nullable: true
+          description: Total processing time in seconds (null if not completed)
+          example: 74.5
         person_image_size:
           type: integer
-          description: File size in bytes
+          description: File size of person image in bytes
+          example: 524288
         clothing_image_size:
           type: integer
-          description: File size in bytes
+          description: File size of clothing image in bytes
+          example: 612352
         result_image_size:
           type: integer
-          description: File size in bytes
           nullable: true
+          description: File size of result image in bytes (null if not completed)
+          example: 735821
         error_message:
           type: string
           nullable: true
+          description: Error message if processing failed (null if successful)
+          example: null
 
     VTONStatusResponse:
       type: object
+      description: VTON request status response (subset of full response)
+      required:
+        - code
+        - message
+        - request_id
+        - status
       properties:
         code:
           type: string
+          description: Response code
           example: VTON_STATUS_FETCHED
         message:
           type: string
+          description: Response message
+          example: VTON status fetched successfully
         request_id:
           type: string
           format: uuid
+          description: Unique identifier for this VTON request
+          example: "550e8400-e29b-41d4-a716-446655440000"
         status:
           type: string
+          description: Current processing status
           enum: [pending, queued, processing, completed, failed, cancelled]
+          example: completed
         person_image_url:
           type: string
           format: uri
+          description: Public URL to the person image
+          example: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
         clothing_image_url:
           type: string
           format: uri
+          description: Public URL to the clothing image
+          example: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
         result_image_url:
           type: string
           format: uri
           nullable: true
+          description: Public URL to the result image (null if not completed)
+          example: "http://localhost:8000/media/vton/output/result_def456.jpg"
         created_at:
           type: string
           format: date-time
+          description: When the request was created
+          example: "2025-11-03T10:00:00Z"
         processing_duration_seconds:
           type: number
           format: float
           nullable: true
+          description: Processing duration in seconds
+          example: 74.5
 
     VTONListResponse:
       type: object
+      description: List of VTON requests with count
+      required:
+        - code
+        - message
+        - requests
+        - count
       properties:
         code:
           type: string
+          description: Response code
           example: VTON_REQUESTS_FETCHED
         message:
           type: string
+          description: Response message
+          example: VTON requests fetched successfully
         requests:
           type: array
+          description: Array of VTON request status objects
           items:
             $ref: "#/components/schemas/VTONStatusResponse"
         count:
           type: integer
+          description: Total number of requests returned
+          example: 10
 
     ErrorResponse:
       type: object
+      description: Standard error response format
+      required:
+        - code
+        - message
       properties:
         code:
           type: string
+          description: Error code for programmatic handling
           example: VALIDATION_ERROR
+          enum:
+            - VALIDATION_ERROR
+            - VTN010
+            - VTN001
+            - VTON_REQUEST_NOT_FOUND
+            - VTON_PROCESSING_ERROR
+            - FIL001
+            - SYSTEM_ERROR
         message:
           type: string
+          description: Human-readable error message
           example: Invalid request parameters
         errors:
           type: object
+          description: Field-specific validation errors (if applicable)
           additionalProperties:
             type: array
             items:
               type: string
+          example:
+            person_image: ["Person image is required."]
+            clothing_image: ["Clothing image is required."]
         detail:
           type: string
+          description: Additional error details or context
+          example: "VTONRequest with ID 550e8400-e29b-41d4-a716-446655440000 not found"

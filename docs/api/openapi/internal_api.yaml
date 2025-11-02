@@ -33,6 +33,8 @@ tags:
     description: API key creation, management, and statistics
   - name: Admin
     description: Administrative operations (admin users only)
+  - name: Documentation
+    description: OpenAPI specification endpoints
 
 security:
   - BearerAuth: []
@@ -94,6 +96,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Invalid credentials
           content:
@@ -106,6 +114,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/admin-login/:
+    post:
+      tags:
+        - Authentication
+      summary: Admin User Login
+      description: |
+        Authenticate admin users ONLY and return JWT tokens.
+        This endpoint is specifically for admin users (staff, superuser, or user_type='admin').
+        Regular users will be rejected even with valid credentials.
+      operationId: adminLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              examples:
+                adminLoginSuccess:
+                  summary: Successful admin login
+                  value:
+                    code: "LOGIN_SUCCESS"
+                    message: "Login successful"
+                    user:
+                      id: 1
+                      username: "admin_user"
+                      email: "admin@example.com"
+                      first_name: "Admin"
+                      last_name: "User"
+                      is_active: true
+                      date_joined: "2025-01-01T00:00:00Z"
+                      last_login: "2025-11-03T10:00:00Z"
+                      user_type: "admin"
+                      is_verified: true
+                      is_premium: false
+                      premium_expiry: null
+                      phone_number: "+1234567890"
+                    access: "eyJ0eXAiOiJKV1QiLCJhbGc..."
+                    refresh: "eyJ0eXAiOiJKV1QiLCJhbGc..."
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied - valid user but not admin, account inactive, or suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                notAdmin:
+                  summary: Non-admin user attempted admin login
+                  value:
+                    code: "ACCESS_DENIED"
+                    message: "Access denied"
+                    detail: "This endpoint is for admin users only. Please use the regular login endpoint."
 
   /auth/logout/:
     post:
@@ -765,6 +845,152 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # Documentation Endpoints
+  /docs/:
+    get:
+      tags:
+        - Documentation
+      summary: API Documentation Info
+      description: Get information about available API documentation endpoints
+      operationId: getApiDocsInfo
+      security: []
+      responses:
+        "200":
+          description: Documentation info retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: SUCCESS
+                  message:
+                    type: string
+                    example: API documentation endpoints
+                  endpoints:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        path:
+                          type: string
+                        description:
+                          type: string
+                        access:
+                          type: string
+                        authentication:
+                          type: string
+                        formats:
+                          type: array
+                          items:
+                            type: string
+                        usage:
+                          type: string
+
+  /docs/client-api-spec/:
+    get:
+      tags:
+        - Documentation
+      summary: Get Client API Specification
+      description: |
+        Retrieve the OpenAPI specification for the Client API (VTON service).
+        This endpoint is public and does not require authentication.
+        Supports both JSON and YAML formats via query parameter.
+      operationId: getClientApiSpec
+      security: []
+      parameters:
+        - name: format
+          in: query
+          description: Response format
+          schema:
+            type: string
+            enum: [json, yaml]
+            default: yaml
+      responses:
+        "200":
+          description: OpenAPI specification retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAPI 3.0 specification object
+            application/x-yaml:
+              schema:
+                type: string
+                description: OpenAPI 3.0 specification in YAML format
+        "404":
+          description: Specification file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error parsing specification file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /docs/internal-api-spec/:
+    get:
+      tags:
+        - Documentation
+      summary: Get Internal API Specification
+      description: |
+        Retrieve the OpenAPI specification for the Internal API.
+        This endpoint requires admin authentication.
+        Supports both JSON and YAML formats via query parameter.
+      operationId: getInternalApiSpec
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          description: Response format
+          schema:
+            type: string
+            enum: [json, yaml]
+            default: yaml
+      responses:
+        "200":
+          description: OpenAPI specification retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAPI 3.0 specification object
+            application/x-yaml:
+              schema:
+                type: string
+                description: OpenAPI 3.0 specification in YAML format
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Specification file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error parsing specification file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -804,10 +1030,13 @@ components:
           type: string
         phone_number:
           type: string
+          maxLength: 20
+          description: Phone number (optional)
         user_type:
           type: string
-          enum: [customer, business, developer]
+          enum: [customer, store_owner, admin]
           default: customer
+          description: Type of user account
 
     RegisterResponse:
       type: object
@@ -866,46 +1095,84 @@ components:
       properties:
         id:
           type: integer
+          description: Unique user ID
         username:
           type: string
+          description: User's username
         email:
           type: string
+          format: email
+          description: User's email address
         first_name:
           type: string
+          description: User's first name
         last_name:
           type: string
+          description: User's last name
         is_active:
           type: boolean
-        is_staff:
-          type: boolean
+          description: Whether the user account is active
         date_joined:
           type: string
           format: date-time
+          description: Date and time when user registered
         last_login:
           type: string
           format: date-time
-        user_data:
-          $ref: "#/components/schemas/UserData"
+          nullable: true
+          description: Date and time of last login
+        user_type:
+          type: string
+          enum: [customer, store_owner, admin]
+          description: Type of user account
+        is_verified:
+          type: boolean
+          description: Whether the user is verified
+        is_premium:
+          type: boolean
+          description: Whether the user has premium status
+        premium_expiry:
+          type: string
+          format: date-time
+          nullable: true
+          description: Premium subscription expiry date
+        phone_number:
+          type: string
+          description: User's phone number
 
     UserData:
       type: object
       properties:
         user_type:
           type: string
+          enum: [customer, store_owner, admin]
+          description: Type of user account
         phone_number:
           type: string
+          description: User's phone number
         company_name:
           type: string
+          description: Company name (if applicable)
         is_verified:
           type: boolean
+          description: Email verification status
         is_premium:
           type: boolean
+          description: Premium subscription status
+        premium_expiry:
+          type: string
+          format: date-time
+          nullable: true
+          description: Premium expiry date
         max_api_keys:
           type: integer
+          description: Maximum API keys allowed
         current_api_keys_count:
           type: integer
+          description: Current number of API keys
         api_key_generation_enabled:
           type: boolean
+          description: Whether user can generate API keys
 
     UserInfoResponse:
       type: object

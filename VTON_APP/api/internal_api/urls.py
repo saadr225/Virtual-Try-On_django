@@ -7,6 +7,7 @@ urlpatterns = [
     # Authentication endpoints (JWT-based)
     path("auth/register/", auth_views.register, name="register"),  # User registration
     path("auth/login/", auth_views.login_view, name="login"),  # User login (returns JWT tokens)
+    path("auth/admin-login/", auth_views.admin_login_view, name="admin-login"),  # Admin-only login (rejects non-admin users)
     path("auth/logout/", auth_views.logout_view, name="logout"),  # User logout (blacklists JWT refresh token)
     path("auth/token/refresh/", auth_views.token_refresh_view, name="token-refresh"),  # JWT token refresh
     # User Profile endpoints (JWT authentication required)
