@@ -21,6 +21,26 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
+# ============================================================================
+# Debug Flags - Control verbose logging and debugging features
+# ============================================================================
+DEBUG_FLAGS = {
+    # Middleware Logging
+    "LOG_REQUESTS": os.getenv("DEBUG_LOG_REQUESTS", "False") == "True",  # Log all incoming requests
+    "LOG_RESPONSES": os.getenv("DEBUG_LOG_RESPONSES", "False") == "True",  # Log all responses
+    "LOG_REQUEST_HEADERS": os.getenv("DEBUG_LOG_REQUEST_HEADERS", "False") == "True",  # Log request headers
+    "LOG_REQUEST_BODY": os.getenv("DEBUG_LOG_REQUEST_BODY", "False") == "True",  # Log request body
+    "LOG_QUERY_PARAMS": os.getenv("DEBUG_LOG_QUERY_PARAMS", "False") == "True",  # Log query parameters
+    # Database Logging
+    "LOG_DATABASE_QUERIES": os.getenv("DEBUG_LOG_DATABASE_QUERIES", "False") == "True",  # Log all SQL queries
+    # API Logging
+    "LOG_API_KEY_VALIDATION": os.getenv("DEBUG_LOG_API_KEY_VALIDATION", "False") == "True",  # Log API key validation
+    # VTON Processing
+    "LOG_VTON_PROCESSING": os.getenv("DEBUG_LOG_VTON_PROCESSING", str(DEBUG)) == "True",  # Log VTON processing details
+    # Performance Metrics
+    "LOG_PERFORMANCE_METRICS": os.getenv("DEBUG_LOG_PERFORMANCE_METRICS", "False") == "True",  # Log response times
+}
+
 # Host URL for generating public URLs (e.g., https://yourdomain.com/)
 HOST_URL = os.getenv("HOST_URL", "http://localhost:8000/")
 
@@ -282,17 +302,46 @@ LOGGING = {
         "verbose": {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+        "clean": {
+            "format": "{asctime} [{levelname}] {name}: {message}",
+            "style": "{",
+            "datefmt": "%H:%M:%S",
+        },
+    },
+    "filters": {
+        "require_debug_false": {
+            "()": "django.utils.log.RequireDebugFalse",
+        },
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "clean",
+        },
+        "console_verbose": {
+            "class": "logging.StreamHandler",
             "formatter": "verbose",
+            "filters": ["require_debug_true"],
         },
         "file": {
             "class": "logging.FileHandler",
             "filename": "django.log",
             "formatter": "verbose",
+        },
+        "file_errors": {
+            "class": "logging.FileHandler",
+            "filename": "errors.log",
+            "formatter": "verbose",
+            "level": "ERROR",
         },
     },
     "root": {
@@ -300,19 +349,57 @@ LOGGING = {
         "level": "INFO",
     },
     "loggers": {
+        # Django core loggers
         "django": {
             "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["console", "file"],
             "level": "WARNING",
             "propagate": False,
         },
+        "django.request": {
+            "handlers": ["console", "file_errors"],
+            "level": "ERROR",  # Only log request errors
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": [],  # Disable django.server logging (we use our middleware)
+            "level": "CRITICAL",
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console_verbose"],
+            "level": "DEBUG" if DEBUG_FLAGS.get("LOG_DATABASE_QUERIES") else "WARNING",
+            "propagate": False,
+        },
+        # Application loggers
         "api": {
-            "handlers": ["console"],
+            "handlers": ["console", "file_errors"],
             "level": "INFO",
+            "propagate": False,
+        },
+        "api.client_api": {
+            "handlers": ["console", "file_errors"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "api.internal_api": {
+            "handlers": ["console", "file_errors"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "app": {
+            "handlers": ["console", "file_errors"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Middleware loggers
+        "app.utils.middleware": {
+            "handlers": ["console", "file_errors"],
+            "level": "DEBUG" if (DEBUG_FLAGS.get("LOG_REQUESTS") or DEBUG_FLAGS.get("LOG_RESPONSES")) else "INFO",
+            "propagate": False,
+        },
+        "api.client_api.utils.middleware": {
+            "handlers": ["console_verbose"] if DEBUG_FLAGS.get("LOG_API_KEY_VALIDATION") else ["console"],
+            "level": "DEBUG" if DEBUG_FLAGS.get("LOG_API_KEY_VALIDATION") else "WARNING",
             "propagate": False,
         },
     },
