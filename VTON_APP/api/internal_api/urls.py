@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import auth_views, client_api_management_views
+from .views import auth_views, client_api_management_views, admin_views
 
 app_name = "internal_api"
 
@@ -22,4 +22,15 @@ urlpatterns = [
     path("api-keys/<uuid:key_id>/delete/", client_api_management_views.delete_api_key, name="delete-api-key"),  # Delete API key
     path("api-keys/<uuid:key_id>/regenerate/", client_api_management_views.regenerate_api_key, name="regenerate-api-key"),  # Regenerate API key
     path("api-keys/<uuid:key_id>/stats/", client_api_management_views.get_api_key_stats, name="api-key-stats"),  # Get API key stats
+    # User Quota endpoints (JWT authentication required)
+    path("quota/me/", client_api_management_views.get_my_quota, name="get-my-quota"),  # Get current user's quota info
+    # Admin endpoints (Admin only - JWT authentication + admin permission required)
+    path("admin/users/quotas/", admin_views.list_all_users_quotas, name="admin-list-user-quotas"),  # List all users with quotas
+    path("admin/users/search/", admin_views.search_users, name="admin-search-users"),  # Search for users
+    path("admin/users/<str:username>/quota/", admin_views.get_user_quota, name="admin-get-user-quota"),  # Get specific user quota
+    path("admin/users/<str:username>/quota/update/", admin_views.update_user_quota, name="admin-update-user-quota"),  # Update user quota
+    path("admin/users/<str:username>/details/", admin_views.get_user_details, name="admin-get-user-details"),  # Get comprehensive user details
+    path("admin/api-keys/", admin_views.list_all_api_keys, name="admin-list-all-api-keys"),  # List all API keys (all users)
+    path("admin/api-keys/<uuid:key_id>/update/", admin_views.admin_update_api_key, name="admin-update-api-key"),  # Admin update any API key
+    path("admin/api-keys/<uuid:key_id>/delete/", admin_views.admin_delete_api_key, name="admin-delete-api-key"),  # Admin delete any API key
 ]

@@ -12,10 +12,10 @@ class APIKeyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating new API keys."""
 
     name = serializers.CharField(required=True, max_length=100, help_text="Unique name to identify this API key")
-    rate_limit_per_minute = serializers.IntegerField(default=100, min_value=1, help_text="Maximum requests per minute")
-    rate_limit_per_hour = serializers.IntegerField(default=1000, min_value=1, help_text="Maximum requests per hour")
-    rate_limit_per_day = serializers.IntegerField(default=10000, min_value=1, help_text="Maximum requests per day")
-    monthly_quota = serializers.IntegerField(default=500, min_value=1, help_text="Maximum requests per month")
+    rate_limit_per_minute = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per minute (admin only)")
+    rate_limit_per_hour = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per hour (admin only)")
+    rate_limit_per_day = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per day (admin only)")
+    monthly_quota = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per month (admin only)")
     allowed_domains = serializers.JSONField(required=False, default=list, help_text="List of allowed domains (empty = all domains allowed)")
     allowed_ips = serializers.JSONField(required=False, default=list, help_text="List of allowed IP addresses (empty = all IPs allowed)")
     expires_in_days = serializers.IntegerField(required=False, allow_null=True, help_text="Number of days until key expires (null = never expires)")
@@ -53,15 +53,56 @@ class APIKeyCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Validate rate limits are sensible."""
-        per_minute = attrs.get("rate_limit_per_minute", 100)
-        per_hour = attrs.get("rate_limit_per_hour", 1000)
-        per_day = attrs.get("rate_limit_per_day", 10000)
+        """Validate rate limits and apply user defaults."""
+        user = self.context["request"].user
+        from api.internal_api.utils.permissions import is_admin_user
+        from app.models import UserData
+
+        # Get or create user data
+        user_data, created = UserData.objects.get_or_create(user=user)
+
+        # Check if user can create API key
+        can_create, error_msg = user_data.can_create_api_key()
+        if not can_create:
+            raise serializers.ValidationError(error_msg)
+
+        # Apply defaults from UserData if not admin
+        is_admin = is_admin_user(user)
+
+        if not is_admin:
+            # Non-admin users get defaults from their UserData
+            attrs["rate_limit_per_minute"] = user_data.default_rate_limit_per_minute
+            attrs["rate_limit_per_hour"] = user_data.default_rate_limit_per_hour
+            attrs["rate_limit_per_day"] = user_data.default_rate_limit_per_day
+            attrs["monthly_quota"] = user_data.default_monthly_quota
+        else:
+            # Admin can specify custom values, or use defaults
+            attrs.setdefault("rate_limit_per_minute", user_data.default_rate_limit_per_minute)
+            attrs.setdefault("rate_limit_per_hour", user_data.default_rate_limit_per_hour)
+            attrs.setdefault("rate_limit_per_day", user_data.default_rate_limit_per_day)
+            attrs.setdefault("monthly_quota", user_data.default_monthly_quota)
+
+        # Validate rate limits are in sensible order
+        per_minute = attrs.get("rate_limit_per_minute")
+        per_hour = attrs.get("rate_limit_per_hour")
+        per_day = attrs.get("rate_limit_per_day")
 
         if per_hour < per_minute:
             raise serializers.ValidationError("Hourly limit must be >= minutely limit")
         if per_day < per_hour:
             raise serializers.ValidationError("Daily limit must be >= hourly limit")
+
+        # Validate cumulative quota doesn't exceed user's limit (for non-admins)
+        if not is_admin:
+            monthly_quota = attrs.get("monthly_quota")
+            current_total = sum(key.monthly_quota for key in APIKey.objects.filter(user=user))
+
+            if current_total + monthly_quota > user_data.user_monthly_quota:
+                raise serializers.ValidationError(
+                    f"Total monthly quota ({current_total + monthly_quota}) would exceed "
+                    f"user limit ({user_data.user_monthly_quota}). "
+                    f"You have {user_data.user_monthly_quota - current_total} quota remaining."
+                )
 
         return attrs
 
@@ -205,8 +246,19 @@ class APIKeyUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Validate rate limits are sensible."""
+        """Validate rate limits are sensible and check permissions."""
+        from api.internal_api.utils.permissions import is_admin_user
+
+        user = self.context["request"].user
+        is_admin = is_admin_user(user)
         obj = self.instance
+
+        # Check if non-admin is trying to modify quota fields
+        quota_fields = ["rate_limit_per_minute", "rate_limit_per_hour", "rate_limit_per_day", "monthly_quota"]
+        if not is_admin:
+            for field in quota_fields:
+                if field in attrs:
+                    raise serializers.ValidationError({field: f"Only admins can modify {field}. Contact administrator to change rate limits."})
 
         per_minute = attrs.get("rate_limit_per_minute", obj.rate_limit_per_minute)
         per_hour = attrs.get("rate_limit_per_hour", obj.rate_limit_per_hour)

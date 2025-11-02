@@ -89,6 +89,9 @@ USER_ACCOUNT_ERROR_CODES = {
     "INVALID_PHONE_NUMBER": {"code": "USR019", "message": "Invalid phone number format."},
     "PROFILE_UPDATE_ERROR": {"code": "USR020", "message": "Error updating user profile."},
     "ADDRESS_UPDATE_ERROR": {"code": "USR021", "message": "Error updating address information."},
+    "USER_QUOTA_EXCEEDED": {"code": "USR022", "message": "User quota limit exceeded."},
+    "USER_QUOTA_UPDATE_ERROR": {"code": "USR023", "message": "Error updating user quota settings."},
+    "CANNOT_CREATE_API_KEY": {"code": "USR024", "message": "Cannot create API key. Quota or limit exceeded."},
 }
 
 # VTON Request Processing Error Codes
@@ -212,6 +215,7 @@ GENERAL_ERROR_CODES = {
     "CONFLICT": {"code": "SYS009", "message": "Resource conflict detected."},
     # Server errors
     "SERVER_ERROR": {"code": "SYS010", "message": "An unexpected server error occurred."},
+    "SYSTEM_ERROR": {"code": "SYS010", "message": "An unexpected server error occurred."},  # Alias for SERVER_ERROR
     "DATABASE_ERROR": {"code": "SYS011", "message": "Database operation failed."},
     "SERVICE_UNAVAILABLE": {"code": "SYS012", "message": "Service is temporarily unavailable."},
     # Operational errors
@@ -253,6 +257,8 @@ APIKEY_ERROR_CODES = {
     "API_KEY_LIMIT_REACHED": {"code": "API020", "message": "Maximum API key limit reached for your plan."},
     "API_DOMAIN_NOT_WHITELISTED": {"code": "API021", "message": "Domain not whitelisted for this API key."},
     "API_IP_NOT_WHITELISTED": {"code": "API022", "message": "IP address not whitelisted for this API key."},
+    "API_GENERATION_DISABLED": {"code": "API023", "message": "API key generation is disabled for this user."},
+    "API_CUMULATIVE_QUOTA_EXCEEDED": {"code": "API024", "message": "Cumulative user quota exceeded. Cannot create more API keys."},
 }
 
 # Audit and Logging Error Codes
@@ -290,6 +296,10 @@ API_SUCCESS_CODES = {
     "VTON_STATUS_FETCHED": {"code": "API111", "message": "VTON status fetched successfully."},
     "USAGE_STATS_FETCHED": {"code": "API112", "message": "Usage statistics fetched successfully."},
     "LIST_FETCHED": {"code": "API113", "message": "List fetched successfully."},
+    "USER_QUOTA_FETCHED": {"code": "API114", "message": "User quota information fetched successfully."},
+    "USER_QUOTA_UPDATED": {"code": "API115", "message": "User quota updated successfully."},
+    "USER_SEARCH_COMPLETED": {"code": "API116", "message": "User search completed successfully."},
+    "USER_DETAILS_FETCHED": {"code": "API117", "message": "User details fetched successfully."},
 }
 
 # API Error Codes

@@ -7,7 +7,7 @@ from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.db.models import Q, Count
-from app.models import APIKey, AuditLog, APIUsageLog, DailyUsageStats
+from app.models import APIKey, AuditLog, APIUsageLog, DailyUsageStats, UserData
 from app.Controllers.ResponseCodesController import get_response_code
 from api.internal_api.serializers.client_api_management_seiralizers import (
     APIKeyCreateSerializer,
@@ -419,3 +419,80 @@ def get_api_key_stats(request, key_id):
     except Exception as e:
         logger.error(f"Error fetching API key stats: {str(e)}")
         return create_response("USAGE_STATS_FETCH_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+@csrf_exempt
+def get_my_quota(request):
+    """
+    Get current user's API key quota information.
+
+    GET /internal/api/quota/me/
+
+    Response:
+        - max_api_keys: Maximum API keys allowed
+        - current_api_keys: Current number of API keys
+        - api_key_generation_enabled: Whether user can create API keys
+        - user_monthly_quota: Total monthly quota across all keys
+        - cumulative_quota_used: Total quota used this month
+        - quota_remaining: Remaining quota for the month
+        - default_rate_limits: Default limits for new API keys
+        - api_keys_summary: Brief summary of each key's usage
+
+    Response Codes:
+        - SUC002: Data retrieved successfully
+        - SERVER_ERROR: Internal server error
+    """
+    try:
+        user_data, created = UserData.objects.get_or_create(user=request.user)
+
+        # Get user's API keys
+        api_keys = APIKey.objects.filter(user=request.user)
+        current_api_keys_count = api_keys.count()
+
+        # Calculate cumulative quota used
+        cumulative_quota_used = user_data.get_cumulative_monthly_quota_used()
+        quota_remaining = user_data.get_remaining_user_quota()
+
+        # Get summary of each API key
+        api_keys_summary = []
+        for api_key in api_keys:
+            from app.Controllers.ClientSideApiController import ClientSideApiController
+
+            stats = ClientSideApiController.get_usage_statistics(api_key)
+
+            api_keys_summary.append(
+                {
+                    "key_id": str(api_key.key_id),
+                    "name": api_key.name,
+                    "status": api_key.status,
+                    "requests_this_month": stats.get("requests_this_month", 0),
+                    "monthly_quota": api_key.monthly_quota,
+                    "quota_remaining": stats.get("quota_remaining", 0),
+                    "last_used_at": api_key.last_used_at,
+                }
+            )
+
+        quota_info = {
+            "max_api_keys": user_data.max_api_keys,
+            "current_api_keys": current_api_keys_count,
+            "can_create_more": user_data.can_create_api_key(),
+            "api_key_generation_enabled": user_data.api_key_generation_enabled,
+            "user_monthly_quota": user_data.user_monthly_quota,
+            "cumulative_quota_used": cumulative_quota_used,
+            "quota_remaining": quota_remaining,
+            "default_rate_limits": {
+                "per_minute": user_data.default_rate_limit_per_minute,
+                "per_hour": user_data.default_rate_limit_per_hour,
+                "per_day": user_data.default_rate_limit_per_day,
+                "monthly_quota": user_data.default_monthly_quota,
+            },
+            "api_keys_summary": api_keys_summary,
+        }
+
+        return create_response("DATA_RETRIEVED", {"quota_info": quota_info}, status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error fetching user quota: {str(e)}")
+        return create_response("SERVER_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
