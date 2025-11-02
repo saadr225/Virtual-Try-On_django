@@ -8,3 +8,5 @@ migrations/
 
 django.log
 ~$sign and architecture.docx
+
+tests/logs/
