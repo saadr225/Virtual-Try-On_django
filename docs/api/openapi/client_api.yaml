@@ -1,0 +1,326 @@
+openapi: 3.0.3
+
+info:
+  title: VTON Client API
+  version: 1.0.0
+  description: |
+    External-facing API for Virtual Try-On (VTON) service integration.
+    This API provides endpoints for submitting VTON requests and retrieving results.
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com/api/client
+    description: Production server
+  - url: http://localhost:8000/api/client
+    description: Development server
+
+tags:
+  - name: Health
+    description: Service health monitoring
+  - name: Virtual Try-On
+    description: VTON processing endpoints
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /:
+    get:
+      tags:
+        - Health
+      summary: Health Check
+      description: Check the health status of the API service
+      operationId: healthcheck
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+
+  /virtual-tryon/process/:
+    post:
+      tags:
+        - Virtual Try-On
+      summary: Process Virtual Try-On Request
+      description: |
+        Submit a virtual try-on request with person and clothing images.
+        Processing typically takes 30-120 seconds.
+      operationId: processVirtualTryon
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - person_image
+                - clothing_image
+              properties:
+                person_image:
+                  type: string
+                  format: binary
+                  description: Image of the person (JPG, PNG, max 10MB)
+                clothing_image:
+                  type: string
+                  format: binary
+                  description: Image of the clothing item (JPG, PNG, max 10MB)
+                instructions:
+                  type: string
+                  description: Optional processing instructions
+                  maxLength: 500
+      responses:
+        "200":
+          description: VTON request processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VTONResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Processing error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VTONResponse"
+
+  /virtual-tryon/{request_id}/status/:
+    get:
+      tags:
+        - Virtual Try-On
+      summary: Get Request Status
+      description: Retrieve the status and details of a specific VTON request
+      operationId: getRequestStatus
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          description: UUID of the VTON request
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Request status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VTONStatusResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /virtual-tryon/requests/:
+    get:
+      tags:
+        - Virtual Try-On
+      summary: List Recent Requests
+      description: List recent VTON requests with optional filtering
+      operationId: listRecentRequests
+      parameters:
+        - name: limit
+          in: query
+          description: Number of requests to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [pending, queued, processing, completed, failed, cancelled]
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VTONListResponse"
+        "400":
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  schemas:
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: string
+          example: "5 days, 3:45:12"
+        cpu_usage_percent:
+          type: number
+          format: float
+        memory_usage_percent:
+          type: number
+          format: float
+        total_memory_gb:
+          type: number
+          format: float
+        available_memory_gb:
+          type: number
+          format: float
+
+    VTONResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VTON_REQUEST_COMPLETED
+        message:
+          type: string
+          example: Virtual try-on request completed successfully
+        request_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, queued, processing, completed, failed, cancelled]
+        person_image_url:
+          type: string
+          format: uri
+        clothing_image_url:
+          type: string
+          format: uri
+        result_image_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        processing_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        processing_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        processing_duration_seconds:
+          type: number
+          format: float
+          nullable: true
+        person_image_size:
+          type: integer
+          description: File size in bytes
+        clothing_image_size:
+          type: integer
+          description: File size in bytes
+        result_image_size:
+          type: integer
+          description: File size in bytes
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    VTONStatusResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VTON_STATUS_FETCHED
+        message:
+          type: string
+        request_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, queued, processing, completed, failed, cancelled]
+        person_image_url:
+          type: string
+          format: uri
+        clothing_image_url:
+          type: string
+          format: uri
+        result_image_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        processing_duration_seconds:
+          type: number
+          format: float
+          nullable: true
+
+    VTONListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VTON_REQUESTS_FETCHED
+        message:
+          type: string
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/VTONStatusResponse"
+        count:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Invalid request parameters
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        detail:
+          type: string

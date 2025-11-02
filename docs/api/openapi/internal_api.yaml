@@ -1,0 +1,1288 @@
+openapi: 3.0.3
+
+info:
+  title: VTON Internal API
+  version: 1.0.0
+  description: |
+    Internal API for frontend application and admin panel.
+    Handles user authentication, profile management, API key management, and admin operations.
+
+    ## Authentication
+    Uses JWT (JSON Web Token) authentication with access and refresh tokens.
+    - Access Token: Valid for 30 minutes
+    - Refresh Token: Valid for 7 days
+    - Token rotation enabled for enhanced security
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com/api/internal
+    description: Production server
+  - url: http://localhost:8000/api/internal
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: User registration, login, logout, and token management
+  - name: User Profile
+    description: User profile information and management
+  - name: API Keys
+    description: API key creation, management, and statistics
+  - name: Admin
+    description: Administrative operations (admin users only)
+
+security:
+  - BearerAuth: []
+
+paths:
+  # Authentication Endpoints
+  /auth/register/:
+    post:
+      tags:
+        - Authentication
+      summary: Register New User
+      description: Create a new user account
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login/:
+    post:
+      tags:
+        - Authentication
+      summary: User Login
+      description: Authenticate user and return JWT tokens
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Account inactive or suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout/:
+    post:
+      tags:
+        - Authentication
+      summary: User Logout
+      description: Logout user and blacklist refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh
+              properties:
+                refresh:
+                  type: string
+                  description: JWT refresh token to blacklist
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/token/refresh/:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh Access Token
+      description: Get a new access token using refresh token
+      operationId: tokenRefresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh
+              properties:
+                refresh:
+                  type: string
+                  description: JWT refresh token
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenRefreshResponse"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # User Profile Endpoints
+  /auth/me/:
+    get:
+      tags:
+        - User Profile
+      summary: Get Current User Info
+      description: Retrieve authenticated user's information
+      operationId: getUserInfo
+      responses:
+        "200":
+          description: User information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfoResponse"
+
+  /auth/profile/:
+    put:
+      tags:
+        - User Profile
+      summary: Update Profile
+      description: Update user profile information
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfoResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      tags:
+        - User Profile
+      summary: Partial Update Profile
+      description: Partially update user profile information
+      operationId: partialUpdateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfoResponse"
+
+  /auth/change-password/:
+    post:
+      tags:
+        - User Profile
+      summary: Change Password
+      description: Change user password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error or incorrect old password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/delete-account/:
+    post:
+      tags:
+        - User Profile
+      summary: Delete Account
+      description: Delete user account (soft delete - deactivates account)
+      operationId: deleteAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+                - confirm
+              properties:
+                password:
+                  type: string
+                  description: Current password for confirmation
+                confirm:
+                  type: boolean
+                  description: Must be true to confirm deletion
+      responses:
+        "200":
+          description: Account deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # API Key Management Endpoints
+  /api-keys/:
+    get:
+      tags:
+        - API Keys
+      summary: List API Keys
+      description: List all API keys for the authenticated user
+      operationId: listApiKeys
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [active, inactive, suspended]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: API keys retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyListResponse"
+
+  /api-keys/create/:
+    post:
+      tags:
+        - API Keys
+      summary: Create API Key
+      description: Create a new API key
+      operationId: createApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api-keys/{key_id}/:
+    get:
+      tags:
+        - API Keys
+      summary: Get API Key Details
+      description: Get detailed information about a specific API key
+      operationId: getApiKeyDetail
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api-keys/{key_id}/update/:
+    put:
+      tags:
+        - API Keys
+      summary: Update API Key
+      description: Update API key settings
+      operationId: updateApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApiKeyRequest"
+      responses:
+        "200":
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+    patch:
+      tags:
+        - API Keys
+      summary: Partial Update API Key
+      operationId: partialUpdateApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApiKeyRequest"
+      responses:
+        "200":
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+
+  /api-keys/{key_id}/delete/:
+    delete:
+      tags:
+        - API Keys
+      summary: Delete API Key
+      description: Delete an API key
+      operationId: deleteApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /api-keys/{key_id}/regenerate/:
+    post:
+      tags:
+        - API Keys
+      summary: Regenerate API Key
+      description: Regenerate/rotate an API key (invalidates old key)
+      operationId: regenerateApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirm
+              properties:
+                confirm:
+                  type: boolean
+                  description: Must be true to confirm regeneration
+      responses:
+        "200":
+          description: API key regenerated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+
+  /api-keys/{key_id}/stats/:
+    get:
+      tags:
+        - API Keys
+      summary: Get API Key Statistics
+      description: Get usage statistics for an API key
+      operationId: getApiKeyStats
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyStatsResponse"
+
+  /quota/me/:
+    get:
+      tags:
+        - API Keys
+      summary: Get My Quota
+      description: Get current user's API key quota information
+      operationId: getMyQuota
+      responses:
+        "200":
+          description: Quota information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotaInfoResponse"
+
+  # Admin Endpoints
+  /admin/users/quotas/:
+    get:
+      tags:
+        - Admin
+      summary: List All Users with Quotas
+      description: List all users and their API key quotas (Admin only)
+      operationId: listAllUsersQuotas
+      parameters:
+        - name: user_type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaListResponse"
+        "403":
+          description: Access denied (not admin)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/search/:
+    get:
+      tags:
+        - Admin
+      summary: Search Users
+      description: Search for users by username, email, or name (Admin only)
+      operationId: searchUsers
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+        - name: user_type
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Search results retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaListResponse"
+        "400":
+          description: Missing search query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{username}/quota/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Quota
+      description: Get specific user's API key quota settings (Admin only)
+      operationId: getUserQuota
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quota retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaResponse"
+
+  /admin/users/{username}/quota/update/:
+    put:
+      tags:
+        - Admin
+      summary: Update User Quota
+      description: Update user's API key quota settings (Admin only)
+      operationId: updateUserQuota
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserQuotaRequest"
+      responses:
+        "200":
+          description: Quota updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaResponse"
+
+  /admin/users/{username}/details/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Details
+      description: Get comprehensive details about a specific user (Admin only)
+      operationId: getUserDetails
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetailsResponse"
+
+  /admin/api-keys/:
+    get:
+      tags:
+        - Admin
+      summary: List All API Keys
+      description: List all API keys across all users (Admin only)
+      operationId: listAllApiKeys
+      parameters:
+        - name: username
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, suspended]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: API keys retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminApiKeyListResponse"
+
+  /admin/api-keys/{key_id}/update/:
+    put:
+      tags:
+        - Admin
+      summary: Admin Update API Key
+      description: Update any API key with full control (Admin only)
+      operationId: adminUpdateApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateApiKeyRequest"
+      responses:
+        "200":
+          description: API key updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+
+  /admin/api-keys/{key_id}/delete/:
+    delete:
+      tags:
+        - Admin
+      summary: Admin Delete API Key
+      description: Delete any API key (Admin only)
+      operationId: adminDeleteApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token authentication
+
+  schemas:
+    # Authentication Schemas
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - password2
+        - first_name
+        - last_name
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        password2:
+          type: string
+          minLength: 8
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+        user_type:
+          type: string
+          enum: [customer, business, developer]
+          default: customer
+
+    RegisterResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: RESOURCE_CREATED
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserInfo"
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: LOGIN_SUCCESS
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserInfo"
+        access:
+          type: string
+          description: JWT access token (30 minutes validity)
+        refresh:
+          type: string
+          description: JWT refresh token (7 days validity)
+
+    TokenRefreshResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        access:
+          type: string
+        refresh:
+          type: string
+
+    # User Profile Schemas
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        is_staff:
+          type: boolean
+        date_joined:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        user_data:
+          $ref: "#/components/schemas/UserData"
+
+    UserData:
+      type: object
+      properties:
+        user_type:
+          type: string
+        phone_number:
+          type: string
+        company_name:
+          type: string
+        is_verified:
+          type: boolean
+        is_premium:
+          type: boolean
+        max_api_keys:
+          type: integer
+        current_api_keys_count:
+          type: integer
+        api_key_generation_enabled:
+          type: boolean
+
+    UserInfoResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserInfo"
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone_number:
+          type: string
+        company_name:
+          type: string
+        address_line1:
+          type: string
+        address_line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - old_password
+        - new_password
+        - new_password2
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+        new_password2:
+          type: string
+          minLength: 8
+
+    # API Key Schemas
+    CreateApiKeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        rate_limit_per_minute:
+          type: integer
+          default: 100
+        rate_limit_per_hour:
+          type: integer
+          default: 1000
+        rate_limit_per_day:
+          type: integer
+          default: 10000
+        monthly_quota:
+          type: integer
+          default: 500
+        allowed_domains:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+        expires_in_days:
+          type: integer
+          nullable: true
+
+    UpdateApiKeyRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        rate_limit_per_minute:
+          type: integer
+        rate_limit_per_hour:
+          type: integer
+        rate_limit_per_day:
+          type: integer
+        monthly_quota:
+          type: integer
+        allowed_domains:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+
+    ApiKeyDetail:
+      type: object
+      properties:
+        key_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        api_key:
+          type: string
+          description: Full API key (only shown on creation/regeneration)
+        api_key_preview:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        rate_limit_per_minute:
+          type: integer
+        rate_limit_per_hour:
+          type: integer
+        rate_limit_per_day:
+          type: integer
+        monthly_quota:
+          type: integer
+        total_requests:
+          type: integer
+        requests_this_month:
+          type: integer
+        allowed_domains:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+
+    ApiKeyDetailResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        api_key:
+          $ref: "#/components/schemas/ApiKeyDetail"
+
+    ApiKeyListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        api_keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyDetail"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    ApiKeyStatsResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        stats:
+          type: object
+          properties:
+            key_id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            total_requests:
+              type: integer
+            requests_this_month:
+              type: integer
+            requests_this_day:
+              type: integer
+            quota_remaining:
+              type: integer
+            last_used_at:
+              type: string
+              format: date-time
+            status:
+              type: string
+            rate_limits:
+              type: object
+
+    QuotaInfoResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        quota_info:
+          type: object
+          properties:
+            max_api_keys:
+              type: integer
+            current_api_keys:
+              type: integer
+            can_create_more:
+              type: boolean
+            api_key_generation_enabled:
+              type: boolean
+            user_monthly_quota:
+              type: integer
+            cumulative_quota_used:
+              type: integer
+            quota_remaining:
+              type: integer
+            default_rate_limits:
+              type: object
+            api_keys_summary:
+              type: array
+              items:
+                type: object
+
+    # Admin Schemas
+    UpdateUserQuotaRequest:
+      type: object
+      properties:
+        max_api_keys:
+          type: integer
+        api_key_generation_enabled:
+          type: boolean
+        user_monthly_quota:
+          type: integer
+        default_rate_limit_per_minute:
+          type: integer
+        default_rate_limit_per_hour:
+          type: integer
+        default_rate_limit_per_day:
+          type: integer
+        default_monthly_quota:
+          type: integer
+
+    UserQuotaResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        user_quota:
+          type: object
+
+    UserQuotaListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        users:
+          type: array
+          items:
+            type: object
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    UserDetailsResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        user_details:
+          type: object
+          properties:
+            user_info:
+              type: object
+            quota_info:
+              type: object
+            api_keys:
+              type: array
+              items:
+                type: object
+            activity_summary:
+              type: object
+
+    AdminUpdateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        rate_limit_per_minute:
+          type: integer
+        rate_limit_per_hour:
+          type: integer
+        rate_limit_per_day:
+          type: integer
+        monthly_quota:
+          type: integer
+        allowed_domains:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+
+    AdminApiKeyListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        api_keys:
+          type: array
+          items:
+            type: object
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # Common Schemas
+    SuccessResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        detail:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer

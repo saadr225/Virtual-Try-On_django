@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import auth_views, client_api_management_views, admin_views
+from .views import auth_views, client_api_management_views, admin_views, docs_view
 
 app_name = "internal_api"
 
@@ -33,4 +33,8 @@ urlpatterns = [
     path("admin/api-keys/", admin_views.list_all_api_keys, name="admin-list-all-api-keys"),  # List all API keys (all users)
     path("admin/api-keys/<uuid:key_id>/update/", admin_views.admin_update_api_key, name="admin-update-api-key"),  # Admin update any API key
     path("admin/api-keys/<uuid:key_id>/delete/", admin_views.admin_delete_api_key, name="admin-delete-api-key"),  # Admin delete any API key
+    # API Documentation endpoints
+    path("docs/", docs_view.api_docs_info, name="api-docs-info"),  # Get information about available API documentation
+    path("docs/client-api-spec/", docs_view.client_api_spec, name="client-api-spec"),  # Public: Client API OpenAPI spec
+    path("docs/internal-api-spec/", docs_view.internal_api_spec, name="internal-api-spec"),  # Admin only: Internal API OpenAPI spec
 ]

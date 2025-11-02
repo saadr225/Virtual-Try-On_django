@@ -85,6 +85,7 @@ class UserSerializer(serializers.ModelSerializer):
     is_premium = serializers.SerializerMethodField()
     premium_expiry = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -95,6 +96,8 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "is_active",
+            "is_staff",
+            "is_superuser",
             "date_joined",
             "last_login",
             "user_type",
@@ -102,8 +105,9 @@ class UserSerializer(serializers.ModelSerializer):
             "is_premium",
             "premium_expiry",
             "phone_number",
+            "is_admin",
         ]
-        read_only_fields = ["id", "username", "date_joined", "last_login"]
+        read_only_fields = ["id", "username", "date_joined", "last_login", "is_staff", "is_superuser"]
 
     def get_user_type(self, obj):
         """Get user type from UserData."""
@@ -139,6 +143,31 @@ class UserSerializer(serializers.ModelSerializer):
             return obj.userdata.phone_number
         except UserData.DoesNotExist:
             return ""
+
+    def get_is_admin(self, obj):
+        """
+        Determine if user has admin privileges.
+
+        A user is considered an admin if:
+        - is_staff is True (Django staff user)
+        - is_superuser is True (Django superuser)
+        - user_type is 'admin' in UserData
+
+        Returns:
+            bool: True if user has admin privileges
+        """
+        # Check Django admin status
+        if obj.is_staff or obj.is_superuser:
+            return True
+
+        # Check user_type in UserData
+        try:
+            if obj.userdata.user_type == "admin":
+                return True
+        except UserData.DoesNotExist:
+            pass
+
+        return False
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
