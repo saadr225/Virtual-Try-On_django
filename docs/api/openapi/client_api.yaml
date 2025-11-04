@@ -42,11 +42,25 @@ info:
     - **API022**: IP address not whitelisted for this API key
     - **USR022**: User-level quota exceeded across all API keys
 
+    ## Usage Notes
+
+    - All API responses follow a standardized format with `code` and `message` fields
+    - Use Postman or similar tools for testing - Swagger UI is disabled for security
+    - All timestamps are in ISO 8601 format (UTC)
+    - Image uploads must be multipart/form-data
+    - Maximum image size: 10MB per file
+    - Supported formats: JPG, JPEG, PNG
   contact:
     name: API Support
     email: support@example.com
   license:
     name: Proprietary
+
+servers:
+  - url: https://your-domain.com/api/v1
+    description: Production server (replace with your actual domain)
+  - url: http://localhost:8000/api/v1
+    description: Development server
 
 # servers:
 #   - url: https://api.example.com/api/v1
@@ -82,6 +96,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthCheckResponse"
+              examples:
+                healthy:
+                  summary: Service health status
+                  value:
+                    status: "healthy"
+                    timestamp: "2025-11-03T10:30:00Z"
+                    uptime: "5 days, 3:45:12"
+                    cpu_usage_percent: 25.5
+                    memory_usage_percent: 60.2
+                    total_memory_gb: 16.0
+                    available_memory_gb: 6.37
               example:
                 status: "healthy"
                 timestamp: "2025-11-03T10:30:00Z"
@@ -99,6 +124,11 @@ paths:
       description: |
         Submit a virtual try-on request with person and clothing images.
 
+        **Authentication:** Required (API key in X-API-Key header)
+
+        **Request Headers:**
+        - `X-API-Key: your-api-key-here`
+
         **Processing Flow:**
         1. Validates API key and checks rate limits/quotas
         2. Validates and saves uploaded images
@@ -114,8 +144,6 @@ paths:
         - Supported formats: JPG, JPEG, PNG
         - Maximum file size: 10MB per image
         - Recommended resolution: 512x512 to 1024x1024 pixels
-
-        **Authentication:** API key required in `X-API-Key` header.
 
         **Rate Limiting:** Subject to per-minute, per-hour, per-day limits and monthly quota.
       operationId: processVirtualTryon
@@ -135,15 +163,24 @@ paths:
                   type: string
                   format: binary
                   description: Image of the person (JPG, PNG, max 10MB)
+                  example: "person.jpg"
                 clothing_image:
                   type: string
                   format: binary
                   description: Image of the clothing item (JPG, PNG, max 10MB)
+                  example: "clothing.jpg"
                 instructions:
                   type: string
                   description: Optional processing instructions or preferences
                   maxLength: 500
                   example: "Ensure the clothing fits naturally"
+            examples:
+              basicRequest:
+                summary: Basic VTON request
+                value:
+                  person_image: "Binary image data"
+                  clothing_image: "Binary image data"
+                  instructions: "Make the fit look natural"
       responses:
         "200":
           description: VTON request processed successfully
@@ -302,6 +339,13 @@ paths:
       description: |
         Retrieve the status and details of a specific VTON request by its UUID.
 
+        **Authentication:** Required (API key in X-API-Key header)
+
+        **Request Headers:**
+        - `X-API-Key: your-api-key-here`
+
+        **Access Control:** You can only view requests created with your API key.
+
         **Use Cases:**
         - Poll for completion of long-running requests
         - Retrieve result URLs after processing
@@ -315,10 +359,6 @@ paths:
         - `completed`: Successfully processed with result image
         - `failed`: Processing failed, check error_message
         - `cancelled`: Request was cancelled
-
-        **Authentication:** API key required in `X-API-Key` header.
-
-        **Access Control:** You can only view requests created with your API key.
       operationId: getRequestStatus
       security:
         - ApiKeyAuth: []
@@ -330,7 +370,7 @@ paths:
           schema:
             type: string
             format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
+            example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "200":
           description: Request status retrieved successfully
@@ -370,7 +410,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Access denied
+          description: Access denied - request not owned by your API key
           content:
             application/json:
               schema:
@@ -393,99 +433,98 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /virtual-tryon/requests/:
-    get:
-      tags:
-        - Virtual Try-On
-      summary: List Recent Requests
-      description: |
-        List recent VTON requests with optional filtering.
+    tags:
+      - Virtual Try-On
+    summary: List Recent Requests
+    description: |
+      List recent VTON requests with optional filtering.
 
-        **Use Cases:**
-        - View processing history
-        - Monitor request statuses
-        - Retrieve multiple requests at once
-        - Filter by status for specific workflows
+      **Use Cases:**
+      - View processing history
+      - Monitor request statuses
+      - Retrieve multiple requests at once
+      - Filter by status for specific workflows
 
-        **Authentication:** API key required in `X-API-Key` header.
+      **Authentication:** API key required in `X-API-Key` header.
 
-        **Access Control:** Only returns requests created with your API key.
+      **Access Control:** Only returns requests created with your API key.
 
-        **Pagination:** Use the `limit` parameter to control how many results are returned.
-      operationId: listRecentRequests
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - name: limit
-          in: query
-          description: Number of requests to return
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-          example: 20
-        - name: status
-          in: query
-          description: Filter by status
-          schema:
-            type: string
-            enum: [pending, queued, processing, completed, failed, cancelled]
-          example: completed
-      responses:
-        "200":
-          description: Requests retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VTONListResponse"
-              example:
-                code: "VTON_REQUESTS_FETCHED"
-                message: "VTON requests fetched successfully"
-                requests:
-                  - request_id: "550e8400-e29b-41d4-a716-446655440000"
-                    status: "completed"
-                    person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
-                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
-                    result_image_url: "http://localhost:8000/media/vton/output/result_def456.jpg"
-                    created_at: "2025-11-03T10:00:00Z"
-                    processing_duration_seconds: 74.5
-                  - request_id: "661f9510-f30c-52e5-b827-557766551111"
-                    status: "processing"
-                    person_image_url: "http://localhost:8000/media/vton/uploads/person_xyz987.jpg"
-                    clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_def654.jpg"
-                    result_image_url: null
-                    created_at: "2025-11-03T10:05:00Z"
-                    processing_duration_seconds: null
-                count: 2
-        "400":
-          description: Invalid query parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: "VALIDATION_ERROR"
-                message: "Validation error"
-                errors:
-                  status: ["Invalid status. Must be one of: pending, queued, processing, completed, failed, cancelled"]
-        "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Access denied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "429":
-          description: Rate limit exceeded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+      **Pagination:** Use the `limit` parameter to control how many results are returned.
+    operationId: listRecentRequests
+    security:
+      - ApiKeyAuth: []
+    parameters:
+      - name: limit
+        in: query
+        description: Number of requests to return
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        example: 20
+      - name: status
+        in: query
+        description: Filter by status
+        schema:
+          type: string
+          enum: [pending, queued, processing, completed, failed, cancelled]
+        example: completed
+    responses:
+      "200":
+        description: Requests retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VTONListResponse"
+            example:
+              code: "VTON_REQUESTS_FETCHED"
+              message: "VTON requests fetched successfully"
+              requests:
+                - request_id: "550e8400-e29b-41d4-a716-446655440000"
+                  status: "completed"
+                  person_image_url: "http://localhost:8000/media/vton/uploads/person_abc123.jpg"
+                  clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_xyz789.jpg"
+                  result_image_url: "http://localhost:8000/media/vton/output/result_def456.jpg"
+                  created_at: "2025-11-03T10:00:00Z"
+                  processing_duration_seconds: 74.5
+                - request_id: "661f9510-f30c-52e5-b827-557766551111"
+                  status: "processing"
+                  person_image_url: "http://localhost:8000/media/vton/uploads/person_xyz987.jpg"
+                  clothing_image_url: "http://localhost:8000/media/vton/uploads/clothing_def654.jpg"
+                  result_image_url: null
+                  created_at: "2025-11-03T10:05:00Z"
+                  processing_duration_seconds: null
+              count: 2
+      "400":
+        description: Invalid query parameters
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+            example:
+              code: "VALIDATION_ERROR"
+              message: "Validation error"
+              errors:
+                status: ["Invalid status. Must be one of: pending, queued, processing, completed, failed, cancelled"]
+      "401":
+        description: Authentication failed
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "403":
+        description: Access denied
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "429":
+        description: Rate limit exceeded
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
 
 components:
   securitySchemes:
@@ -497,8 +536,8 @@ components:
         API key for authentication. Obtain your API key from the admin dashboard.
 
         **How to obtain an API key:**
-        1. Log in to your account via the internal API
-        2. Navigate to API Keys section
+        1. Register/Login to your account via the Internal API
+        2. Navigate to API Keys section in your dashboard
         3. Generate a new API key with a descriptive name
         4. Copy the key (it will only be shown once)
         5. Include it in the `X-API-Key` header for all requests
@@ -511,13 +550,20 @@ components:
         - Expiration dates (optional)
         - Usage analytics and logs
 
-        **Example:**
-        ```
-        curl -X POST https://api.example.com/api/v1/virtual-tryon/process/ \
+        **Example Usage:**
+        ```bash
+        curl -X POST https://your-domain.com/api/v1/virtual-tryon/process/ \
           -H "X-API-Key: vton_sk_1234567890abcdef" \
           -F "person_image=@person.jpg" \
           -F "clothing_image=@clothing.jpg"
         ```
+
+        **Testing with Postman:**
+        - Import this OpenAPI spec into Postman
+        - Set the `X-API-Key` header in your requests
+        - Use the provided examples as starting points
+
+        **Security Note:** Never expose your API key in client-side code or public repositories.
 
   schemas:
     HealthCheckResponse:

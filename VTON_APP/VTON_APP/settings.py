@@ -96,11 +96,13 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
     "x-api-key",  # Required for API key authentication
 ]
-
-CORS_ALLOWED_ORIGINS = [
-    os.environ.get("FRONTEND_URL"),
-    os.environ.get("FRONTEND_URL_WWW"),
-]
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        os.environ.get("FRONTEND_URL"),
+        os.environ.get("FRONTEND_URL_WWW"),
+    ]
 
 
 if os.environ.get("DEBUG"):

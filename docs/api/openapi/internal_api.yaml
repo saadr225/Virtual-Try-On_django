@@ -8,21 +8,51 @@ info:
     Handles user authentication, profile management, API key management, and admin operations.
 
     ## Authentication
-    Uses JWT (JSON Web Token) authentication with access and refresh tokens.
-    - Access Token: Valid for 30 minutes
-    - Refresh Token: Valid for 7 days
-    - Token rotation enabled for enhanced security
+
+    This API uses JWT (JSON Web Token) authentication. Most endpoints require authentication.
+
+    ### JWT Token Format
+    Include the JWT access token in the `Authorization` header:
+    ```
+    Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+    ```
+
+    ### Token Lifetimes
+    - **Access Token**: Valid for 30 minutes
+    - **Refresh Token**: Valid for 7 days
+    - Token rotation is enabled for enhanced security
+
+    ### Obtaining Tokens
+    1. Use `/auth/login/` or `/auth/admin-login/` to get initial tokens
+    2. Use `/auth/token/refresh/` to get new access tokens when they expire
+    3. Use `/auth/logout/` to blacklist refresh tokens
+
+    ### Admin Access
+    Admin endpoints require additional admin privileges:
+    - Django staff/superuser status, OR
+    - UserData.user_type = 'admin'
+
+    ## Rate Limiting
+    API endpoints are subject to rate limiting to prevent abuse:
+    - Authenticated endpoints: 1000 requests/hour per user
+    - Unauthenticated endpoints: 100 requests/hour per IP
+
+    ## Usage Notes
+    - All API responses follow a standardized format with `code` and `message` fields
+    - Use Postman or similar tools for testing - Swagger UI is disabled for security
+    - All timestamps are in ISO 8601 format (UTC)
+    - Pagination uses `page` and `limit` query parameters where applicable
   contact:
     name: API Support
     email: support@example.com
   license:
     name: Proprietary
 
-# servers:
-#   - url: https://api.example.com/api/internal
-#     description: Production server
-#   - url: http://localhost:8000/api/internal
-#     description: Development server
+servers:
+  - url: https://your-domain.com/api/internal
+    description: Production server (replace with your actual domain)
+  - url: http://localhost:8000/api/internal
+    description: Development server
 
 tags:
   - name: Authentication
@@ -45,8 +75,21 @@ paths:
     post:
       tags:
         - Authentication
-      summary: Register New User
-      description: Create a new user account
+      summary: Register New User Account
+      description: |
+        Create a new user account with profile information.
+
+        **Authentication:** Not required (public endpoint)
+
+        **Request Headers:** None required
+
+        **Process:**
+        1. Validates user input data
+        2. Creates Django User and UserData records
+        3. Sends email verification (if configured)
+        4. Returns user information and success message
+
+        **Note:** New accounts may require email verification before full access.
       operationId: register
       security: []
       requestBody:
@@ -55,32 +98,90 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              customerRegistration:
+                summary: Register as customer
+                value:
+                  username: "johndoe"
+                  email: "john.doe@example.com"
+                  password: "SecurePass123!"
+                  password2: "SecurePass123!"
+                  first_name: "John"
+                  last_name: "Doe"
+                  phone_number: "+1234567890"
+                  user_type: "customer"
       responses:
         "201":
-          description: User created successfully
+          description: User account created successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RegisterResponse"
+              examples:
+                success:
+                  summary: Successful registration
+                  value:
+                    code: "RESOURCE_CREATED"
+                    message: "User created successfully"
+                    user:
+                      id: 1
+                      username: "johndoe"
+                      email: "john.doe@example.com"
+                      first_name: "John"
+                      last_name: "Doe"
+                      is_active: true
+                      date_joined: "2025-11-03T10:00:00Z"
+                      user_type: "customer"
+                      is_verified: false
         "400":
-          description: Validation error
+          description: Validation error - invalid input data
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validationError:
+                  summary: Missing required fields
+                  value:
+                    code: "VALIDATION_ERROR"
+                    message: "Validation error"
+                    errors:
+                      username: ["This field is required."]
+                      email: ["This field is required."]
         "409":
           description: Username or email already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "USR006"
+                message: "This email is already registered"
+                detail: "A user with this email address already exists"
 
   /auth/login/:
     post:
       tags:
         - Authentication
       summary: User Login
-      description: Authenticate user and return JWT tokens
+      description: |
+        Authenticate user credentials and return JWT tokens.
+
+        **Authentication:** Not required (public endpoint)
+
+        **Request Headers:** None required
+
+        **Process:**
+        1. Validates username/email and password
+        2. Checks account status (active, not suspended)
+        3. Generates JWT access and refresh tokens
+        4. Updates user's last login timestamp
+        5. Returns user info and tokens
+
+        **Token Usage:**
+        - Use access token in `Authorization: Bearer <token>` header
+        - Use refresh token with `/auth/token/refresh/` when access token expires
+        - Store tokens securely (access token in memory, refresh token in httpOnly cookie if possible)
       operationId: login
       security: []
       requestBody:
@@ -89,15 +190,48 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/LoginRequest"
+            examples:
+              usernameLogin:
+                summary: Login with username
+                value:
+                  username: "johndoe"
+                  password: "SecurePass123!"
+              emailLogin:
+                summary: Login with email
+                value:
+                  username: "john.doe@example.com"
+                  password: "SecurePass123!"
       responses:
         "200":
-          description: Login successful
+          description: Login successful - returns JWT tokens
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    code: "LOGIN_SUCCESS"
+                    message: "Login successful"
+                    user:
+                      id: 1
+                      username: "johndoe"
+                      email: "john.doe@example.com"
+                      first_name: "John"
+                      last_name: "Doe"
+                      is_active: true
+                      date_joined: "2025-01-01T00:00:00Z"
+                      last_login: "2025-11-03T10:00:00Z"
+                      user_type: "customer"
+                      is_verified: true
+                      is_premium: false
+                      premium_expiry: null
+                      phone_number: "+1234567890"
+                    access: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                    refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
         "400":
-          description: Validation error
+          description: Validation error - missing or invalid credentials
           content:
             application/json:
               schema:
@@ -108,12 +242,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "AUT003"
+                message: "Invalid email or password"
         "403":
           description: Account inactive or suspended
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                accountInactive:
+                  summary: Account deactivated
+                  value:
+                    code: "USR015"
+                    message: "User account is inactive"
+                accountSuspended:
+                  summary: Account suspended
+                  value:
+                    code: "USR016"
+                    message: "User account has been suspended"
 
   /auth/admin-login/:
     post:
@@ -192,7 +340,24 @@ paths:
       tags:
         - Authentication
       summary: User Logout
-      description: Logout user and blacklist refresh token
+      description: |
+        Logout user and blacklist the refresh token.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Process:**
+        1. Validates the access token
+        2. Blacklists the provided refresh token
+        3. Logs the logout event
+        4. Returns success response
+
+        **Security Note:** 
+        - Only the refresh token is blacklisted (not the access token)
+        - Access tokens expire naturally after 30 minutes
+        - For complete logout, clear tokens from client storage
       operationId: logout
       requestBody:
         required: true
@@ -206,6 +371,12 @@ paths:
                 refresh:
                   type: string
                   description: JWT refresh token to blacklist
+                  example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+            examples:
+              logout:
+                summary: Logout with refresh token
+                value:
+                  refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
       responses:
         "200":
           description: Logout successful
@@ -213,19 +384,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              example:
+                code: "LOGOUT_SUCCESS"
+                message: "Logout successful"
         "400":
           description: Invalid or expired token
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidToken:
+                  summary: Invalid refresh token
+                  value:
+                    code: "AUT001"
+                    message: "Invalid or expired token"
+                missingToken:
+                  summary: Missing refresh token
+                  value:
+                    code: "VALIDATION_ERROR"
+                    message: "Validation error"
+                    errors:
+                      refresh: ["This field is required."]
 
   /auth/token/refresh/:
     post:
       tags:
         - Authentication
       summary: Refresh Access Token
-      description: Get a new access token using refresh token
+      description: |
+        Get a new access token using a valid refresh token.
+
+        **Authentication:** Not required (uses refresh token in body)
+
+        **Request Headers:** None required
+
+        **Process:**
+        1. Validates the refresh token
+        2. Checks if token is not blacklisted
+        3. Generates new access and refresh tokens
+        4. Blacklists the old refresh token (rotation)
+        5. Returns new token pair
+
+        **Token Rotation:**
+        - Old refresh token is automatically blacklisted
+        - New refresh token has extended expiry (7 days from now)
+        - Access token valid for 30 minutes
+
+        **Usage Pattern:**
+        ```
+        // When access token expires (401 response)
+        POST /auth/token/refresh/
+        {
+          "refresh": "old_refresh_token"
+        }
+        // Response contains new access and refresh tokens
+        ```
       operationId: tokenRefresh
       security: []
       requestBody:
@@ -240,6 +454,12 @@ paths:
                 refresh:
                   type: string
                   description: JWT refresh token
+                  example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+            examples:
+              tokenRefresh:
+                summary: Refresh access token
+                value:
+                  refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
       responses:
         "200":
           description: Token refreshed successfully
@@ -247,35 +467,115 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenRefreshResponse"
+              examples:
+                success:
+                  summary: Successful token refresh
+                  value:
+                    code: "SUCCESS"
+                    message: "Token refreshed successfully"
+                    access: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...new"
+                    refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...new"
         "401":
           description: Invalid or expired refresh token
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                expiredToken:
+                  summary: Refresh token expired
+                  value:
+                    code: "AUT001"
+                    message: "Invalid or expired token"
+                blacklistedToken:
+                  summary: Token was blacklisted
+                  value:
+                    code: "AUT001"
+                    message: "Invalid or expired token"
 
   # User Profile Endpoints
   /auth/me/:
     get:
       tags:
         - User Profile
-      summary: Get Current User Info
-      description: Retrieve authenticated user's information
+      summary: Get Current User Information
+      description: |
+        Retrieve detailed information about the currently authenticated user.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Returns:**
+        - Complete user profile information
+        - Account status and permissions
+        - Subscription/premium status
+        - API key quotas and limits
+
+        **Use Cases:**
+        - Display user profile in frontend
+        - Check account status and permissions
+        - Display quota information
+        - Populate user settings forms
       operationId: getUserInfo
       responses:
         "200":
-          description: User information retrieved
+          description: User information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserInfoResponse"
+              examples:
+                userInfo:
+                  summary: Complete user information
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "User information retrieved successfully"
+                    user:
+                      id: 1
+                      username: "johndoe"
+                      email: "john.doe@example.com"
+                      first_name: "John"
+                      last_name: "Doe"
+                      is_active: true
+                      date_joined: "2025-01-01T00:00:00Z"
+                      last_login: "2025-11-03T10:00:00Z"
+                      user_type: "customer"
+                      is_verified: true
+                      is_premium: false
+                      premium_expiry: null
+                      phone_number: "+1234567890"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/profile/:
     put:
       tags:
         - User Profile
-      summary: Update Profile
-      description: Update user profile information
+      summary: Update User Profile (Full Update)
+      description: |
+        Update complete user profile information. All fields are required.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Validation:**
+        - Email must be unique if changed
+        - Phone number format validation
+        - Required fields cannot be empty
+
+        **Process:**
+        1. Validates all input data
+        2. Updates user and UserData records
+        3. Logs the profile update
+        4. Returns updated user information
       operationId: updateProfile
       requestBody:
         required: true
@@ -283,6 +583,21 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateProfileRequest"
+            examples:
+              fullUpdate:
+                summary: Update all profile fields
+                value:
+                  first_name: "John"
+                  last_name: "Smith"
+                  email: "john.smith@example.com"
+                  phone_number: "+1987654321"
+                  company_name: "ABC Corp"
+                  address_line1: "123 Main St"
+                  address_line2: "Suite 100"
+                  city: "New York"
+                  state: "NY"
+                  country: "USA"
+                  postal_code: "10001"
       responses:
         "200":
           description: Profile updated successfully
@@ -296,11 +611,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     patch:
       tags:
         - User Profile
-      summary: Partial Update Profile
-      description: Partially update user profile information
+      summary: Update User Profile (Partial Update)
+      description: |
+        Partially update user profile information. Only provided fields are updated.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Use Cases:**
+        - Update single field (e.g., just email)
+        - Progressive profile completion
+        - Settings updates
+
+        **Note:** Same validation rules apply to updated fields.
       operationId: partialUpdateProfile
       requestBody:
         required: true
@@ -308,6 +642,11 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateProfileRequest"
+            examples:
+              partialUpdate:
+                summary: Update only email
+                value:
+                  email: "new.email@example.com"
       responses:
         "200":
           description: Profile updated successfully
@@ -321,7 +660,29 @@ paths:
       tags:
         - User Profile
       summary: Change Password
-      description: Change user password
+      description: |
+        Change the authenticated user's password.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Security Requirements:**
+        - Current password must be provided for verification
+        - New password must be confirmed (password2)
+        - Password strength requirements apply
+
+        **Process:**
+        1. Validates current password
+        2. Validates new password strength and confirmation
+        3. Updates password hash
+        4. Logs password change event
+        5. Returns success response
+
+        **Security Note:** 
+        - All active sessions remain valid after password change
+        - Consider forcing re-login for enhanced security
       operationId: changePassword
       requestBody:
         required: true
@@ -329,6 +690,13 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ChangePasswordRequest"
+            examples:
+              passwordChange:
+                summary: Change user password
+                value:
+                  old_password: "CurrentPass123!"
+                  new_password: "NewSecurePass456!"
+                  new_password2: "NewSecurePass456!"
       responses:
         "200":
           description: Password changed successfully
@@ -336,8 +704,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              example:
+                code: "PASSWORD_RESET_SUCCESS"
+                message: "Password changed successfully"
         "400":
           description: Validation error or incorrect old password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                wrongOldPassword:
+                  summary: Incorrect current password
+                  value:
+                    code: "USR004"
+                    message: "Current password is incorrect"
+                passwordMismatch:
+                  summary: New passwords don't match
+                  value:
+                    code: "USR010"
+                    message: "Passwords do not match"
+                    errors:
+                      new_password2: ["Passwords do not match."]
+        "401":
+          description: Authentication required
           content:
             application/json:
               schema:
@@ -347,8 +737,33 @@ paths:
     post:
       tags:
         - User Profile
-      summary: Delete Account
-      description: Delete user account (soft delete - deactivates account)
+      summary: Delete User Account
+      description: |
+        Soft delete the authenticated user's account.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Process:**
+        1. Validates password confirmation
+        2. Validates confirmation flag
+        3. Soft deletes the account (marks as inactive)
+        4. Logs account deletion event
+        5. Blacklists all refresh tokens
+
+        **Important Notes:**
+        - This is a **soft delete** - account is deactivated, not permanently removed
+        - All API keys are deactivated
+        - Account can potentially be restored by administrators
+        - All active sessions are terminated
+        - Data is retained for compliance and audit purposes
+
+        **Irreversible Actions:**
+        - Account becomes unusable immediately
+        - All API keys are permanently deactivated
+        - Cannot be undone by user (requires admin intervention)
       operationId: deleteAccount
       requestBody:
         required: true
@@ -363,9 +778,17 @@ paths:
                 password:
                   type: string
                   description: Current password for confirmation
+                  example: "CurrentPass123!"
                 confirm:
                   type: boolean
                   description: Must be true to confirm deletion
+                  example: true
+            examples:
+              deleteAccount:
+                summary: Delete user account
+                value:
+                  password: "CurrentPass123!"
+                  confirm: true
       responses:
         "200":
           description: Account deleted successfully
@@ -373,35 +796,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              example:
+                code: "RESOURCE_DELETED"
+                message: "Account deleted successfully"
+        "400":
+          description: Validation error or confirmation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                wrongPassword:
+                  summary: Incorrect password
+                  value:
+                    code: "USR004"
+                    message: "Current password is incorrect"
+                notConfirmed:
+                  summary: Confirmation not provided
+                  value:
+                    code: "VALIDATION_ERROR"
+                    message: "Validation error"
+                    errors:
+                      confirm: ["Must be true to confirm deletion."]
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # API Key Management Endpoints
   /api-keys/:
     get:
       tags:
         - API Keys
-      summary: List API Keys
-      description: List all API keys for the authenticated user
+      summary: List User's API Keys
+      description: |
+        List all API keys belonging to the authenticated user.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Features:**
+        - Filter by status (active, inactive, suspended)
+        - Paginated results
+        - Includes usage statistics
+        - Shows rate limits and quotas
+
+        **Response includes:**
+        - API key details (masked for security)
+        - Current usage statistics
+        - Rate limit configurations
+        - Creation and last used timestamps
       operationId: listApiKeys
       parameters:
         - name: status
           in: query
-          description: Filter by status
+          description: Filter by API key status
           schema:
             type: string
             enum: [active, inactive, suspended]
+            example: active
         - name: page
           in: query
+          description: Page number for pagination
           schema:
             type: integer
             minimum: 1
             default: 1
+            example: 1
         - name: limit
           in: query
+          description: Number of results per page
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 10
+            example: 20
       responses:
         "200":
           description: API keys retrieved successfully
@@ -409,28 +883,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyListResponse"
+              examples:
+                apiKeyList:
+                  summary: List of user's API keys
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "API keys retrieved successfully"
+                    api_keys:
+                      - key_id: "550e8400-e29b-41d4-a716-446655440000"
+                        name: "Production Key"
+                        api_key_preview: "vton_sk_1234...abcd"
+                        status: "active"
+                        created_at: "2025-01-01T00:00:00Z"
+                        last_used_at: "2025-11-03T09:00:00Z"
+                        expires_at: null
+                        rate_limit_per_minute: 100
+                        rate_limit_per_hour: 1000
+                        rate_limit_per_day: 10000
+                        monthly_quota: 500
+                        total_requests: 1250
+                        requests_this_month: 450
+                        allowed_domains: []
+                        allowed_ips: []
+                    pagination:
+                      page: 1
+                      limit: 10
+                      total: 2
+                      pages: 1
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api-keys/create/:
     post:
       tags:
         - API Keys
-      summary: Create API Key
+      summary: Create New API Key
       description: |
         Create a new API key for the authenticated user.
 
-        **Non-admin users** can only specify:
-        - name (required)
-        - expires_in_days (optional)
+        **Authentication:** Required (JWT access token)
 
-        All other fields are ignored and default values from your account settings are applied.
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
 
-        **Admin users** can additionally set:
-        - rate_limit_per_minute
-        - rate_limit_per_hour
-        - rate_limit_per_day
-        - monthly_quota
-        - allowed_domains
-        - allowed_ips
+        **Permission Restrictions:**
+        - **Non-admin users** can only specify:
+          - `name` (required)
+          - `expires_in_days` (optional)
+        - **Admin users** can additionally set:
+          - Rate limits (`rate_limit_per_minute`, etc.)
+          - Monthly quota (`monthly_quota`)
+          - Domain restrictions (`allowed_domains`)
+          - IP restrictions (`allowed_ips`)
+
+        **Default Values (for non-admin users):**
+        - Rate limits and quotas use account defaults
+        - No domain/IP restrictions (all allowed)
+        - Never expires (unless `expires_in_days` specified)
+
+        **Security Note:** 
+        - API key is shown only once on creation
+        - Store it securely - it cannot be retrieved later
+        - Use descriptive names for key identification
       operationId: createApiKey
       requestBody:
         required: true
@@ -438,6 +956,23 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateApiKeyRequest"
+            examples:
+              basicKey:
+                summary: Create basic API key (non-admin)
+                value:
+                  name: "My Production API Key"
+                  expires_in_days: 365
+              adminKey:
+                summary: Create advanced API key (admin only)
+                value:
+                  name: "Restricted API Key"
+                  expires_in_days: 30
+                  rate_limit_per_minute: 50
+                  rate_limit_per_hour: 500
+                  rate_limit_per_day: 5000
+                  monthly_quota: 250
+                  allowed_domains: ["example.com", "api.example.com"]
+                  allowed_ips: ["192.168.1.0/24"]
       responses:
         "201":
           description: API key created successfully
@@ -445,8 +980,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+              examples:
+                keyCreated:
+                  summary: API key created successfully
+                  value:
+                    code: "RESOURCE_CREATED"
+                    message: "API key created successfully"
+                    api_key:
+                      key_id: "550e8400-e29b-41d4-a716-446655440000"
+                      name: "My Production API Key"
+                      api_key: "vton_sk_1234567890abcdef1234567890abcdef"
+                      api_key_preview: "vton_sk_1234...cdef"
+                      status: "active"
+                      created_at: "2025-11-03T10:00:00Z"
+                      last_used_at: null
+                      expires_at: "2026-11-03T10:00:00Z"
+                      rate_limit_per_minute: 100
+                      rate_limit_per_hour: 1000
+                      rate_limit_per_day: 10000
+                      monthly_quota: 500
+                      total_requests: 0
+                      requests_this_month: 0
+                      allowed_domains: []
+                      allowed_ips: []
         "400":
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions for advanced settings
           content:
             application/json:
               schema:
@@ -457,22 +1027,53 @@ paths:
       tags:
         - API Keys
       summary: Get API Key Details
-      description: Get detailed information about a specific API key
+      description: |
+        Get detailed information about a specific API key.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only view their own API keys.
+
+        **Returns:**
+        - Complete API key configuration
+        - Usage statistics
+        - Rate limits and quotas
+        - Access restrictions
+        - Timestamps
+
+        **Security Note:** Full API key is not returned (only preview).
       operationId: getApiKeyDetail
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "200":
-          description: API key retrieved successfully
+          description: API key details retrieved successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied - not your API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: API key not found
           content:
@@ -484,37 +1085,55 @@ paths:
     put:
       tags:
         - API Keys
-      summary: Update API Key
+      summary: Update API Key (Full Update)
       description: |
-        Update API key settings.
+        Update complete API key configuration.
 
-        **Non-admin users** can only update:
-        - status (active, inactive, suspended)
+        **Authentication:** Required (JWT access token)
 
-        Attempting to modify other fields will result in a validation error.
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
 
-        **Admin users** can update any field:
-        - status
-        - rate_limit_per_minute
-        - rate_limit_per_hour
-        - rate_limit_per_day
-        - monthly_quota
-        - allowed_domains
-        - allowed_ips
+        **Permission Restrictions:**
+        - **Non-admin users** can only update:
+          - `status` (active, inactive, suspended)
+        - **Admin users** can update any field:
+          - All rate limits and quotas
+          - Domain and IP restrictions
+          - Status
+
+        **Access Control:** Users can only update their own API keys.
+
+        **Important:** Some changes may take effect immediately, others may require key regeneration.
       operationId: updateApiKey
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key to update
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateApiKeyRequest"
+            examples:
+              statusUpdate:
+                summary: Update key status (non-admin)
+                value:
+                  status: "inactive"
+              adminUpdate:
+                summary: Full update (admin only)
+                value:
+                  status: "active"
+                  rate_limit_per_minute: 200
+                  rate_limit_per_hour: 2000
+                  monthly_quota: 1000
+                  allowed_domains: ["trusted-domain.com"]
       responses:
         "200":
           description: API key updated successfully
@@ -522,40 +1141,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     patch:
       tags:
         - API Keys
-      summary: Partial Update API Key
+      summary: Update API Key (Partial Update)
       description: |
-        Partially update API key settings.
+        Partially update API key configuration. Same permission rules apply as full update.
 
-        **Non-admin users** can only update:
-        - status (active, inactive, suspended)
+        **Authentication:** Required (JWT access token)
 
-        Attempting to modify other fields will result in a validation error.
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
 
-        **Admin users** can update any field:
-        - status
-        - rate_limit_per_minute
-        - rate_limit_per_hour
-        - rate_limit_per_day
-        - monthly_quota
-        - allowed_domains
-        - allowed_ips
+        **Use Cases:**
+        - Change only the status
+        - Update single rate limit
+        - Modify only domain restrictions
       operationId: partialUpdateApiKey
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key to update
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateApiKeyRequest"
+            examples:
+              partialStatusUpdate:
+                summary: Change only status
+                value:
+                  status: "suspended"
       responses:
         "200":
           description: API key updated successfully
@@ -569,15 +1215,37 @@ paths:
       tags:
         - API Keys
       summary: Delete API Key
-      description: Delete an API key
+      description: |
+        Permanently delete an API key.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only delete their own API keys.
+
+        **Process:**
+        1. Validates ownership
+        2. Immediately deactivates the key
+        3. Logs deletion event
+        4. Removes key from database
+
+        **Important Notes:**
+        - Deletion is permanent and cannot be undone
+        - All future requests with this key will be rejected
+        - Existing usage logs are retained for audit purposes
+        - Consider suspending the key first if unsure about deletion
       operationId: deleteApiKey
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key to delete
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "200":
           description: API key deleted successfully
@@ -585,21 +1253,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              example:
+                code: "RESOURCE_DELETED"
+                message: "API key deleted successfully"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied - not your API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api-keys/{key_id}/regenerate/:
     post:
       tags:
         - API Keys
       summary: Regenerate API Key
-      description: Regenerate/rotate an API key (invalidates old key)
+      description: |
+        Regenerate/rotate an API key. Creates a new key and invalidates the old one.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only regenerate their own API keys.
+
+        **Process:**
+        1. Validates ownership and confirmation
+        2. Generates new API key
+        3. Updates key record with new value
+        4. Logs regeneration event
+        5. Returns new key details
+
+        **Security Impact:**
+        - Old key becomes invalid immediately
+        - All applications using old key must update
+        - New key has same permissions and limits
+        - Usage statistics reset to zero
+
+        **Best Practices:**
+        - Regenerate keys periodically for security
+        - Update all applications immediately after regeneration
+        - Have backup keys ready during transition
       operationId: regenerateApiKey
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key to regenerate
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       requestBody:
         required: true
         content:
@@ -612,6 +1329,12 @@ paths:
                 confirm:
                   type: boolean
                   description: Must be true to confirm regeneration
+                  example: true
+            examples:
+              regenerateKey:
+                summary: Confirm key regeneration
+                value:
+                  confirm: true
       responses:
         "200":
           description: API key regenerated successfully
@@ -619,21 +1342,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+              examples:
+                keyRegenerated:
+                  summary: New API key generated
+                  value:
+                    code: "API_KEY_REGENERATED"
+                    message: "API key regenerated successfully"
+                    api_key:
+                      key_id: "550e8400-e29b-41d4-a716-446655440000"
+                      name: "My Production API Key"
+                      api_key: "vton_sk_newkey1234567890abcdef1234567890"
+                      api_key_preview: "vton_sk_newk...cdef"
+                      status: "active"
+                      created_at: "2025-11-03T10:00:00Z"
+                      last_used_at: null
+                      expires_at: "2026-11-03T10:00:00Z"
+                      rate_limit_per_minute: 100
+                      rate_limit_per_hour: 1000
+                      rate_limit_per_day: 10000
+                      monthly_quota: 500
+                      total_requests: 0
+                      requests_this_month: 0
+                      allowed_domains: []
+                      allowed_ips: []
+        "400":
+          description: Confirmation required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied - not your API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api-keys/{key_id}/stats/:
     get:
       tags:
         - API Keys
-      summary: Get API Key Statistics
-      description: Get usage statistics for an API key
+      summary: Get API Key Usage Statistics
+      description: |
+        Get detailed usage statistics for a specific API key.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only view statistics for their own API keys.
+
+        **Statistics Include:**
+        - Total requests (all time)
+        - Requests this month
+        - Requests today
+        - Quota remaining
+        - Rate limit status
+        - Last used timestamp
+        - Usage trends
+
+        **Use Cases:**
+        - Monitor API key usage
+        - Check quota status
+        - Plan for rate limit increases
+        - Billing and analytics
       operationId: getApiKeyStats
       parameters:
         - name: key_id
           in: path
           required: true
+          description: UUID of the API key
           schema:
             type: string
             format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         "200":
           description: Statistics retrieved successfully
@@ -641,21 +1436,114 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyStatsResponse"
+              examples:
+                keyStats:
+                  summary: API key usage statistics
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "API key statistics retrieved successfully"
+                    stats:
+                      key_id: "550e8400-e29b-41d4-a716-446655440000"
+                      name: "Production API Key"
+                      total_requests: 1250
+                      requests_this_month: 450
+                      requests_today: 25
+                      quota_remaining: 50
+                      monthly_quota: 500
+                      last_used_at: "2025-11-03T14:30:00Z"
+                      status: "active"
+                      rate_limits:
+                        per_minute: 100
+                        per_hour: 1000
+                        per_day: 10000
+                      usage_percentage: 90.0
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied - not your API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /quota/me/:
     get:
       tags:
         - API Keys
-      summary: Get My Quota
-      description: Get current user's API key quota information
+      summary: Get User Quota Information
+      description: |
+        Get comprehensive quota information for the authenticated user.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Information Includes:**
+        - User-level monthly quota settings
+        - Current cumulative usage across all API keys
+        - Remaining quota
+        - API key generation limits
+        - Default rate limits for new keys
+        - Summary of all user's API keys
+
+        **Use Cases:**
+        - Check overall account limits
+        - Plan API key creation
+        - Monitor account usage
+        - Understand billing implications
       operationId: getMyQuota
       responses:
         "200":
-          description: Quota information retrieved
+          description: Quota information retrieved successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/QuotaInfoResponse"
+              examples:
+                userQuota:
+                  summary: Complete user quota information
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "User quota information retrieved successfully"
+                    quota_info:
+                      max_api_keys: 5
+                      current_api_keys: 2
+                      can_create_more: true
+                      api_key_generation_enabled: true
+                      user_monthly_quota: 1000
+                      cumulative_quota_used: 450
+                      quota_remaining: 550
+                      default_rate_limits:
+                        per_minute: 100
+                        per_hour: 1000
+                        per_day: 10000
+                        monthly_quota: 500
+                      api_keys_summary:
+                        - key_id: "550e8400-e29b-41d4-a716-446655440000"
+                          name: "Production Key"
+                          status: "active"
+                          requests_this_month: 300
+                        - key_id: "661f9510-f30c-52e5-b827-557766551111"
+                          name: "Development Key"
+                          status: "active"
+                          requests_this_month: 150
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # Admin Endpoints
   /admin/users/quotas/:
