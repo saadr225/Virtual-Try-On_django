@@ -78,9 +78,6 @@ tags:
   - name: Documentation
     description: OpenAPI specification endpoints
 
-security:
-  - BearerAuth: []
-
 paths:
   # Authentication Endpoints
   /auth/register/:
@@ -2009,13 +2006,6 @@ paths:
                 detail: An unexpected error occurred
 
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: JWT access token authentication
-
   schemas:
     # Authentication Schemas
     RegisterRequest:

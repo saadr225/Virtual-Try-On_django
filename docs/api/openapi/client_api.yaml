@@ -80,9 +80,6 @@ tags:
   - name: Virtual Try-On
     description: VTON processing endpoints
 
-security:
-  - ApiKeyAuth: []
-
 paths:
   /:
     get:
@@ -94,7 +91,6 @@ paths:
         Returns system metrics including uptime, CPU, and memory usage.
         This endpoint does not require authentication.
       operationId: healthcheck
-      security: []
       responses:
         "200":
           description: Service is healthy
@@ -153,8 +149,6 @@ paths:
 
         **Rate Limiting:** Subject to per-minute, per-hour, per-day limits and monthly quota.
       operationId: processVirtualTryon
-      security:
-        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -366,8 +360,6 @@ paths:
         - `failed`: Processing failed, check error_message
         - `cancelled`: Request was cancelled
       operationId: getRequestStatus
-      security:
-        - ApiKeyAuth: []
       parameters:
         - name: request_id
           in: path
@@ -458,8 +450,6 @@ paths:
 
         **Pagination:** Use the `limit` parameter to control how many results are returned.
       operationId: listRecentRequests
-      security:
-        - ApiKeyAuth: []
       parameters:
         - name: limit
           in: query
@@ -534,44 +524,6 @@ paths:
               $ref: "#/components/schemas/ErrorResponse"
 
 components:
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
-      description: |
-        API key for authentication. Obtain your API key from the admin dashboard.
-
-        **How to obtain an API key:**
-        1. Register/Login to your account via the Internal API
-        2. Navigate to API Keys section in your dashboard
-        3. Generate a new API key with a descriptive name
-        4. Copy the key (it will only be shown once)
-        5. Include it in the `X-API-Key` header for all requests
-
-        **API Key Features:**
-        - Rate limiting (per-minute, per-hour, per-day)
-        - Monthly quota tracking
-        - Domain whitelisting (optional)
-        - IP whitelisting (optional)
-        - Expiration dates (optional)
-        - Usage analytics and logs
-
-        **Example Usage:**
-        ```bash
-        curl -X POST https://your-domain.com/api/v1/virtual-tryon/process/ \
-          -H "X-API-Key: vton_sk_1234567890abcdef" \
-          -F "person_image=@person.jpg" \
-          -F "clothing_image=@clothing.jpg"
-        ```
-
-        **Testing with Postman:**
-        - Import this OpenAPI spec into Postman
-        - Set the `X-API-Key` header in your requests
-        - Use the provided examples as starting points
-
-        **Security Note:** Never expose your API key in client-side code or public repositories.
-
   schemas:
     HealthCheckResponse:
       type: object
