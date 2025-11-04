@@ -79,21 +79,25 @@ def get_client_ip(request):
 
 # Create your views here.
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Middleware handles API key validation
 @csrf_exempt
 def virtual_tryon(request):
     """
     Handle virtual try-on requests by processing uploaded images and generating the output.
 
     This endpoint:
-    1. Validates and saves uploaded images to the uploads/ directory
-    2. Creates a database record to track the request
-    3. Processes the images through the VTON controller
-    4. Saves the result to the output/ directory
-    5. Logs the request for analytics and audit purposes
-    6. Returns public URLs for all images with status
+    1. Validates API key via middleware (X-API-Key header)
+    2. Validates and saves uploaded images to the uploads/ directory
+    3. Creates a database record to track the request
+    4. Processes the images through the VTON controller
+    5. Saves the result to the output/ directory
+    6. Logs the request for analytics and audit purposes
+    7. Returns public URLs for all images with status
 
-    POST /api/vton/virtual-tryon
+    POST /api/v1/virtual-tryon/process/
+
+    Request Headers:
+        - X-API-Key: string (required) - Your API key for authentication
 
     Request Body (multipart/form-data):
         - person_image: File (required) - Image of the person
@@ -105,6 +109,8 @@ def virtual_tryon(request):
         - VTN010: Invalid VTON request parameters
         - FIL001: File upload error
         - VTN009: VTON processing error
+        - API010: API key missing
+        - API002: Invalid API key
     """
     start_time = time.time()
     request_start = timezone.now()
@@ -114,8 +120,9 @@ def virtual_tryon(request):
     user_agent = request.META.get("HTTP_USER_AGENT", "")
     referer = request.META.get("HTTP_REFERER", "")
 
-    # Get user if authenticated (will be None for AllowAny during testing)
-    user = request.user if request.user.is_authenticated else None
+    # Get API key from middleware (if validated)
+    api_key = getattr(request, "api_key", None)
+    user = api_key.user if api_key else None
 
     # Validate input data
     vton_serializer = VTONSerializer(data=request.data)
@@ -145,6 +152,7 @@ def virtual_tryon(request):
     # Create database record with metadata
     vton_request = VTONRequest(
         user=user,
+        api_key=api_key,
         source="api",
         ip_address=ip_address,
         user_agent=user_agent,
@@ -270,7 +278,7 @@ def virtual_tryon(request):
         # Log API usage
         try:
             APIUsageLog.objects.create(
-                api_key=None,  # Will be set when API key authentication is enabled
+                api_key=api_key,
                 vton_request=vton_request,
                 endpoint=request.path,
                 method=request.method,
@@ -324,7 +332,7 @@ def virtual_tryon(request):
         try:
             total_time = time.time() - start_time
             APIUsageLog.objects.create(
-                api_key=None,
+                api_key=api_key,
                 vton_request=vton_request,
                 endpoint=request.path,
                 method=request.method,
@@ -347,12 +355,15 @@ def virtual_tryon(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Middleware handles API key validation
 def get_request_status(request, request_id):
     """
     Get the status and details of a VTON request by its UUID.
 
-    GET /api/vton/status/{request_id}
+    GET /api/v1/virtual-tryon/{request_id}/status/
+
+    Request Headers:
+        - X-API-Key: string (required) - Your API key for authentication
 
     Args:
         request_id: UUID of the VTON request
@@ -360,6 +371,8 @@ def get_request_status(request, request_id):
     Response Codes:
         - API111: VTON status fetched successfully
         - VTN001: VTON request not found
+        - API010: API key missing
+        - API002: Invalid API key
 
     Returns:
         JSON response with request details including public URLs
@@ -367,7 +380,10 @@ def get_request_status(request, request_id):
     request_start = time.time()
     ip_address = get_client_ip(request)
     user_agent = request.META.get("HTTP_USER_AGENT", "")
-    user = request.user if request.user.is_authenticated else None
+
+    # Get API key from middleware
+    api_key = getattr(request, "api_key", None)
+    user = api_key.user if api_key else None
 
     try:
         vton_request = get_object_or_404(VTONRequest, request_id=request_id)
@@ -395,7 +411,7 @@ def get_request_status(request, request_id):
         try:
             total_time = time.time() - request_start
             APIUsageLog.objects.create(
-                api_key=None,
+                api_key=api_key,
                 vton_request=vton_request,
                 endpoint=request.path,
                 method=request.method,
@@ -419,7 +435,7 @@ def get_request_status(request, request_id):
         try:
             total_time = time.time() - request_start
             APIUsageLog.objects.create(
-                api_key=None,
+                api_key=api_key,
                 endpoint=request.path,
                 method=request.method,
                 ip_address=ip_address,
@@ -443,7 +459,7 @@ def get_request_status(request, request_id):
         try:
             total_time = time.time() - request_start
             APIUsageLog.objects.create(
-                api_key=None,
+                api_key=api_key,
                 endpoint=request.path,
                 method=request.method,
                 ip_address=ip_address,
@@ -461,12 +477,15 @@ def get_request_status(request, request_id):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Middleware handles API key validation
 def list_recent_requests(request):
     """
-    List recent VTON requests (for admin/monitoring purposes).
+    List recent VTON requests (for the authenticated API key user).
 
-    GET /api/vton/requests
+    GET /api/v1/virtual-tryon/requests/
+
+    Request Headers:
+        - X-API-Key: string (required) - Your API key for authentication
 
     Query params:
         - limit: Number of requests to return (default: 10, max: 100)
@@ -475,11 +494,16 @@ def list_recent_requests(request):
     Response Codes:
         - API110: VTON requests fetched successfully
         - SYS004: Validation error (invalid status filter)
+        - API010: API key missing
+        - API002: Invalid API key
     """
     request_start = time.time()
     ip_address = get_client_ip(request)
     user_agent = request.META.get("HTTP_USER_AGENT", "")
-    user = request.user if request.user.is_authenticated else None
+
+    # Get API key from middleware
+    api_key = getattr(request, "api_key", None)
+    user = api_key.user if api_key else None
 
     try:
         limit = min(int(request.GET.get("limit", 10)), 100)
@@ -500,11 +524,9 @@ def list_recent_requests(request):
     if status_filter:
         queryset = queryset.filter(status=status_filter)
 
-    # If user is authenticated, they can see all their requests
-    # For unauthenticated requests during testing, show recent requests
-    # TODO: Add proper filtering when authentication is fully implemented
-    # if user:
-    #     queryset = queryset.filter(user=user)
+    # Filter by API key - users can only see their own requests
+    if api_key:
+        queryset = queryset.filter(api_key=api_key)
 
     requests_list = queryset[:limit]
 
@@ -533,7 +555,7 @@ def list_recent_requests(request):
     try:
         total_time = time.time() - request_start
         APIUsageLog.objects.create(
-            api_key=None,
+            api_key=api_key,
             endpoint=request.path,
             method=request.method,
             ip_address=ip_address,

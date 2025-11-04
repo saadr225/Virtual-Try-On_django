@@ -72,6 +72,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",  # Keep for Django admin
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "api.client_api.utils.middleware.APIKeyValidationMiddleware",  # API key authentication for client API
 ]
 
 # CORS settings - Allow credentials for JWT tokens in cookies (if needed)
@@ -93,6 +94,7 @@ CORS_ALLOW_HEADERS = [
     "origin",
     "user-agent",
     "x-requested-with",
+    "x-api-key",  # Required for API key authentication
 ]
 
 CORS_ALLOWED_ORIGINS = [

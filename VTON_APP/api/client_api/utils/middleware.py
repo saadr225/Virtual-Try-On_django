@@ -25,6 +25,7 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         "/admin/",
         "/static/",
         "/media/",
+        "/api/v1/",  # Healthcheck endpoint at root of client API
     ]
 
     def process_request(self, request):
@@ -41,24 +42,35 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         if any(request.path.startswith(path) for path in self.EXEMPT_PATHS):
             return None
 
-        # Only validate Client API endpoints
+        # Only validate Client API endpoints (and exclude the healthcheck at root)
         if not request.path.startswith("/api/v1/"):
+            return None
+
+        # Exempt the healthcheck endpoint specifically
+        if request.path == "/api/v1/" or request.path == "/api/v1":
             return None
 
         # Get API key from header
         api_key_str = request.META.get("HTTP_X_API_KEY")
 
-        # If no API key, allow public access (views can enforce API key if needed)
+        # If no API key provided, return error (API key is required)
         if not api_key_str:
-            request.api_key = None
-            request.api_key_valid = False
-            return None
+            response_code = get_response_code("API_KEY_MISSING")
+            logger.warning(f"API key missing for request to {request.path} from {self._get_client_ip(request)}")
+            return JsonResponse(
+                {
+                    "code": response_code["code"],
+                    "message": response_code["message"],
+                },
+                status=401,
+            )
 
         # Validate request using controller
         is_valid, result, http_status = ClientSideApiController.validate_request(api_key_str, request)
 
         if not is_valid:
             # Return error response
+            logger.warning(f"API key validation failed: {result.get('code')} for {request.path} from {self._get_client_ip(request)}")
             return JsonResponse(
                 {
                     "code": result["code"],
@@ -71,10 +83,19 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         request.api_key = result
         request.api_key_valid = True
 
+        logger.debug(f"API key validated successfully for user {result.user.username}")
+
         # Update last used timestamp
         ClientSideApiController.update_last_used(result)
 
         return None
+
+    def _get_client_ip(self, request):
+        """Extract client IP address from request."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
 
     def process_response(self, request, response):
         """

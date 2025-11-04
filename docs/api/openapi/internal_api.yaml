@@ -18,11 +18,11 @@ info:
   license:
     name: Proprietary
 
-servers:
-  - url: https://api.example.com/api/internal
-    description: Production server
-  - url: http://localhost:8000/api/internal
-    description: Development server
+# servers:
+#   - url: https://api.example.com/api/internal
+#     description: Production server
+#   - url: http://localhost:8000/api/internal
+#     description: Development server
 
 tags:
   - name: Authentication

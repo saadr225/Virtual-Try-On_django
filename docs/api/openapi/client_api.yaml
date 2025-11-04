@@ -6,17 +6,53 @@ info:
   description: |
     External-facing API for Virtual Try-On (VTON) service integration.
     This API provides endpoints for submitting VTON requests and retrieving results.
+
+    ## Authentication
+
+    All API endpoints (except healthcheck) require authentication via API key.
+    Include your API key in the `X-API-Key` header with every request.
+
+    ```
+    X-API-Key: your-api-key-here
+    ```
+
+    ## Rate Limiting
+
+    API keys are subject to rate limits:
+    - Per-minute: 100 requests (configurable per key)
+    - Per-hour: 1,000 requests (configurable per key)
+    - Per-day: 10,000 requests (configurable per key)
+    - Monthly quota: 500 requests (configurable per key)
+
+    Rate limit headers are included in responses.
+
+    ## Error Codes
+
+    The API uses standardized error codes for all responses:
+    - **API010**: API key missing from request headers
+    - **API002**: Invalid or malformed API key
+    - **API003**: API key has expired
+    - **API004**: API key has been suspended
+    - **API005**: API key is inactive
+    - **API014**: Per-minute rate limit exceeded
+    - **API015**: Per-hour rate limit exceeded
+    - **API016**: Per-day rate limit exceeded
+    - **API017**: Monthly quota exceeded
+    - **API021**: Domain not whitelisted for this API key
+    - **API022**: IP address not whitelisted for this API key
+    - **USR022**: User-level quota exceeded across all API keys
+
   contact:
     name: API Support
     email: support@example.com
   license:
     name: Proprietary
 
-servers:
-  - url: https://api.example.com/api/client
-    description: Production server
-  - url: http://localhost:8000/api/client
-    description: Development server
+# servers:
+#   - url: https://api.example.com/api/v1
+#     description: Production server
+#   - url: http://localhost:8000/api/v1
+#     description: Development server
 
 tags:
   - name: Health
@@ -64,11 +100,13 @@ paths:
         Submit a virtual try-on request with person and clothing images.
 
         **Processing Flow:**
-        1. Validates and saves uploaded images
-        2. Creates a database record to track the request
-        3. Processes images through the VTON AI model
-        4. Saves the result image
-        5. Returns public URLs for all images with status
+        1. Validates API key and checks rate limits/quotas
+        2. Validates and saves uploaded images
+        3. Creates a database record to track the request
+        4. Processes images through the VTON AI model
+        5. Saves the result image
+        6. Logs usage for analytics and billing
+        7. Returns public URLs for all images with status
 
         **Processing Time:** Typically takes 30-120 seconds depending on image sizes and server load.
 
@@ -77,9 +115,12 @@ paths:
         - Maximum file size: 10MB per image
         - Recommended resolution: 512x512 to 1024x1024 pixels
 
-        **Authentication:** Currently allows public access. API key authentication will be required in production.
+        **Authentication:** API key required in `X-API-Key` header.
+
+        **Rate Limiting:** Subject to per-minute, per-hour, per-day limits and monthly quota.
       operationId: processVirtualTryon
-      security: []
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -152,17 +193,81 @@ paths:
                       person_image: ["Person image is required."]
                       clothing_image: ["Clothing image is required."]
         "401":
-          description: Invalid or missing API key (when authentication is enabled)
+          description: Authentication failed - invalid or missing API key
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingApiKey:
+                  summary: API key missing
+                  value:
+                    code: "API010"
+                    message: "API key is missing from request headers"
+                invalidApiKey:
+                  summary: Invalid API key
+                  value:
+                    code: "API002"
+                    message: "Invalid API key provided"
+                expiredApiKey:
+                  summary: API key expired
+                  value:
+                    code: "API003"
+                    message: "API key has expired"
+                suspendedApiKey:
+                  summary: API key suspended
+                  value:
+                    code: "API004"
+                    message: "API key has been suspended"
+        "403":
+          description: Access denied - domain or IP not whitelisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                domainNotWhitelisted:
+                  summary: Domain not whitelisted
+                  value:
+                    code: "API021"
+                    message: "Domain not whitelisted for this API key"
+                ipNotWhitelisted:
+                  summary: IP not whitelisted
+                  value:
+                    code: "API022"
+                    message: "IP address not whitelisted for this API key"
         "429":
-          description: Rate limit exceeded
+          description: Rate limit or quota exceeded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                perMinuteLimit:
+                  summary: Per-minute rate limit exceeded
+                  value:
+                    code: "API014"
+                    message: "Per-minute rate limit exceeded"
+                perHourLimit:
+                  summary: Per-hour rate limit exceeded
+                  value:
+                    code: "API015"
+                    message: "Per-hour rate limit exceeded"
+                perDayLimit:
+                  summary: Per-day rate limit exceeded
+                  value:
+                    code: "API016"
+                    message: "Per-day rate limit exceeded"
+                monthlyQuota:
+                  summary: Monthly quota exceeded
+                  value:
+                    code: "API017"
+                    message: "Monthly API quota exceeded"
+                userQuota:
+                  summary: User-level quota exceeded
+                  value:
+                    code: "USR022"
+                    message: "User quota limit exceeded"
         "500":
           description: Processing error
           content:
@@ -205,12 +310,18 @@ paths:
 
         **Status Values:**
         - `pending`: Request created, waiting to start
+        - `queued`: Request queued for processing
         - `processing`: Currently being processed
         - `completed`: Successfully processed with result image
         - `failed`: Processing failed, check error_message
         - `cancelled`: Request was cancelled
+
+        **Authentication:** API key required in `X-API-Key` header.
+
+        **Access Control:** You can only view requests created with your API key.
       operationId: getRequestStatus
-      security: []
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: request_id
           in: path
@@ -252,6 +363,18 @@ paths:
                     result_image_url: null
                     created_at: "2025-11-03T10:00:00Z"
                     processing_duration_seconds: null
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Request not found
           content:
@@ -262,6 +385,12 @@ paths:
                 code: "VTON_REQUEST_NOT_FOUND"
                 message: "VTON request not found"
                 detail: "VTONRequest with ID 550e8400-e29b-41d4-a716-446655440000 not found"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /virtual-tryon/requests/:
     get:
@@ -277,9 +406,14 @@ paths:
         - Retrieve multiple requests at once
         - Filter by status for specific workflows
 
-        **Note:** In production, this endpoint will only return requests associated with the authenticated API key.
+        **Authentication:** API key required in `X-API-Key` header.
+
+        **Access Control:** Only returns requests created with your API key.
+
+        **Pagination:** Use the `limit` parameter to control how many results are returned.
       operationId: listRecentRequests
-      security: []
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: limit
           in: query
@@ -334,6 +468,24 @@ paths:
                 message: "Validation error"
                 errors:
                   status: ["Invalid status. Must be one of: pending, queued, processing, completed, failed, cancelled"]
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   securitySchemes:
@@ -341,7 +493,31 @@ components:
       type: apiKey
       in: header
       name: X-API-Key
-      description: API key for authentication
+      description: |
+        API key for authentication. Obtain your API key from the admin dashboard.
+
+        **How to obtain an API key:**
+        1. Log in to your account via the internal API
+        2. Navigate to API Keys section
+        3. Generate a new API key with a descriptive name
+        4. Copy the key (it will only be shown once)
+        5. Include it in the `X-API-Key` header for all requests
+
+        **API Key Features:**
+        - Rate limiting (per-minute, per-hour, per-day)
+        - Monthly quota tracking
+        - Domain whitelisting (optional)
+        - IP whitelisting (optional)
+        - Expiration dates (optional)
+        - Usage analytics and logs
+
+        **Example:**
+        ```
+        curl -X POST https://api.example.com/api/v1/virtual-tryon/process/ \
+          -H "X-API-Key: vton_sk_1234567890abcdef" \
+          -F "person_image=@person.jpg" \
+          -F "clothing_image=@clothing.jpg"
+        ```
 
   schemas:
     HealthCheckResponse:
@@ -554,12 +730,32 @@ components:
           description: Error code for programmatic handling
           example: VALIDATION_ERROR
           enum:
-            - VALIDATION_ERROR
-            - VTN010
-            - VTN001
+            # Authentication errors
+            - API010 # API key missing
+            - API002 # Invalid API key
+            - API003 # API key expired
+            - API004 # API key suspended
+            - API005 # API key inactive
+            # Rate limiting errors
+            - API014 # Per-minute rate limit exceeded
+            - API015 # Per-hour rate limit exceeded
+            - API016 # Per-day rate limit exceeded
+            - API017 # Monthly quota exceeded
+            # Access control errors
+            - API021 # Domain not whitelisted
+            - API022 # IP not whitelisted
+            - USR022 # User quota exceeded
+            # VTON errors
+            - VTN010 # Invalid VTON request
+            - VTN001 # VTON request not found
             - VTON_REQUEST_NOT_FOUND
             - VTON_PROCESSING_ERROR
-            - FIL001
+            - VTN009 # VTON processing error
+            # File errors
+            - FIL001 # File upload error
+            # System errors
+            - VALIDATION_ERROR
+            - SYS001 # System error
             - SYSTEM_ERROR
         message:
           type: string
