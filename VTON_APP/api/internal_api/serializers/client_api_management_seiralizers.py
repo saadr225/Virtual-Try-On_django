@@ -16,8 +16,8 @@ class APIKeyCreateSerializer(serializers.ModelSerializer):
     rate_limit_per_hour = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per hour (admin only)")
     rate_limit_per_day = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per day (admin only)")
     monthly_quota = serializers.IntegerField(required=False, min_value=1, help_text="Maximum requests per month (admin only)")
-    allowed_domains = serializers.JSONField(required=False, default=list, help_text="List of allowed domains (empty = all domains allowed)")
-    allowed_ips = serializers.JSONField(required=False, default=list, help_text="List of allowed IP addresses (empty = all IPs allowed)")
+    allowed_domains = serializers.JSONField(required=False, default=list, help_text="List of allowed domains (admin only)")
+    allowed_ips = serializers.JSONField(required=False, default=list, help_text="List of allowed IP addresses (admin only)")
     expires_in_days = serializers.IntegerField(required=False, allow_null=True, help_text="Number of days until key expires (null = never expires)")
 
     class Meta:
@@ -69,18 +69,30 @@ class APIKeyCreateSerializer(serializers.ModelSerializer):
         # Apply defaults from UserData if not admin
         is_admin = is_admin_user(user)
 
+        # Restricted fields that only admins can set
+        restricted_fields = ["rate_limit_per_minute", "rate_limit_per_hour", "rate_limit_per_day", "monthly_quota", "allowed_domains", "allowed_ips"]
+
+        # Check if non-admin is trying to set restricted fields
         if not is_admin:
+            for field in restricted_fields:
+                if field in attrs and attrs[field] is not None and (field not in ["allowed_domains", "allowed_ips"] or attrs[field] != []):
+                    raise serializers.ValidationError({field: f"Only admins can set {field}. Contact administrator for assistance."})
+
             # Non-admin users get defaults from their UserData
             attrs["rate_limit_per_minute"] = user_data.default_rate_limit_per_minute
             attrs["rate_limit_per_hour"] = user_data.default_rate_limit_per_hour
             attrs["rate_limit_per_day"] = user_data.default_rate_limit_per_day
             attrs["monthly_quota"] = user_data.default_monthly_quota
+            attrs["allowed_domains"] = []
+            attrs["allowed_ips"] = []
         else:
             # Admin can specify custom values, or use defaults
             attrs.setdefault("rate_limit_per_minute", user_data.default_rate_limit_per_minute)
             attrs.setdefault("rate_limit_per_hour", user_data.default_rate_limit_per_hour)
             attrs.setdefault("rate_limit_per_day", user_data.default_rate_limit_per_day)
             attrs.setdefault("monthly_quota", user_data.default_monthly_quota)
+            attrs.setdefault("allowed_domains", [])
+            attrs.setdefault("allowed_ips", [])
 
         # Validate rate limits are in sensible order
         per_minute = attrs.get("rate_limit_per_minute")
@@ -253,13 +265,16 @@ class APIKeyUpdateSerializer(serializers.ModelSerializer):
         is_admin = is_admin_user(user)
         obj = self.instance
 
-        # Check if non-admin is trying to modify quota fields
-        quota_fields = ["rate_limit_per_minute", "rate_limit_per_hour", "rate_limit_per_day", "monthly_quota"]
-        if not is_admin:
-            for field in quota_fields:
-                if field in attrs:
-                    raise serializers.ValidationError({field: f"Only admins can modify {field}. Contact administrator to change rate limits."})
+        # Restricted fields that only admins can modify
+        restricted_fields = ["rate_limit_per_minute", "rate_limit_per_hour", "rate_limit_per_day", "monthly_quota", "allowed_domains", "allowed_ips"]
 
+        # Check if non-admin is trying to modify restricted fields
+        if not is_admin:
+            for field in restricted_fields:
+                if field in attrs:
+                    raise serializers.ValidationError({field: f"Only admins can modify {field}. Contact administrator to change rate limits and restrictions."})
+
+        # Validate rate limit hierarchy if they're being changed
         per_minute = attrs.get("rate_limit_per_minute", obj.rate_limit_per_minute)
         per_hour = attrs.get("rate_limit_per_hour", obj.rate_limit_per_hour)
         per_day = attrs.get("rate_limit_per_day", obj.rate_limit_per_day)

@@ -415,7 +415,22 @@ paths:
       tags:
         - API Keys
       summary: Create API Key
-      description: Create a new API key
+      description: |
+        Create a new API key for the authenticated user.
+
+        **Non-admin users** can only specify:
+        - name (required)
+        - expires_in_days (optional)
+
+        All other fields are ignored and default values from your account settings are applied.
+
+        **Admin users** can additionally set:
+        - rate_limit_per_minute
+        - rate_limit_per_hour
+        - rate_limit_per_day
+        - monthly_quota
+        - allowed_domains
+        - allowed_ips
       operationId: createApiKey
       requestBody:
         required: true
@@ -470,7 +485,22 @@ paths:
       tags:
         - API Keys
       summary: Update API Key
-      description: Update API key settings
+      description: |
+        Update API key settings.
+
+        **Non-admin users** can only update:
+        - status (active, inactive, suspended)
+
+        Attempting to modify other fields will result in a validation error.
+
+        **Admin users** can update any field:
+        - status
+        - rate_limit_per_minute
+        - rate_limit_per_hour
+        - rate_limit_per_day
+        - monthly_quota
+        - allowed_domains
+        - allowed_ips
       operationId: updateApiKey
       parameters:
         - name: key_id
@@ -496,6 +526,22 @@ paths:
       tags:
         - API Keys
       summary: Partial Update API Key
+      description: |
+        Partially update API key settings.
+
+        **Non-admin users** can only update:
+        - status (active, inactive, suspended)
+
+        Attempting to modify other fields will result in a validation error.
+
+        **Admin users** can update any field:
+        - status
+        - rate_limit_per_minute
+        - rate_limit_per_hour
+        - rate_limit_per_day
+        - monthly_quota
+        - allowed_domains
+        - allowed_ips
       operationId: partialUpdateApiKey
       parameters:
         - name: key_id
@@ -1306,29 +1352,21 @@ components:
       properties:
         name:
           type: string
-        rate_limit_per_minute:
-          type: integer
-          default: 100
-        rate_limit_per_hour:
-          type: integer
-          default: 1000
-        rate_limit_per_day:
-          type: integer
-          default: 10000
-        monthly_quota:
-          type: integer
-          default: 500
-        allowed_domains:
-          type: array
-          items:
-            type: string
-        allowed_ips:
-          type: array
-          items:
-            type: string
+          description: Unique name for the API key
         expires_in_days:
           type: integer
           nullable: true
+          description: Number of days until key expires (null = never expires)
+      description: |
+        Create a new API key. Non-admin users can only set the name and expires_in_days.
+
+        Admin-only fields (ignored for non-admin users):
+        - rate_limit_per_minute (default: 100)
+        - rate_limit_per_hour (default: 1000)
+        - rate_limit_per_day (default: 10000)
+        - monthly_quota (default: 500)
+        - allowed_domains (default: empty = all allowed)
+        - allowed_ips (default: empty = all allowed)
 
     UpdateApiKeyRequest:
       type: object
@@ -1336,22 +1374,17 @@ components:
         status:
           type: string
           enum: [active, inactive, suspended]
-        rate_limit_per_minute:
-          type: integer
-        rate_limit_per_hour:
-          type: integer
-        rate_limit_per_day:
-          type: integer
-        monthly_quota:
-          type: integer
-        allowed_domains:
-          type: array
-          items:
-            type: string
-        allowed_ips:
-          type: array
-          items:
-            type: string
+          description: API key status (non-admin users can only update this field)
+      description: |
+        Update API key settings. Non-admin users can only update the status field.
+
+        Admin-only fields:
+        - rate_limit_per_minute
+        - rate_limit_per_hour
+        - rate_limit_per_day
+        - monthly_quota
+        - allowed_domains
+        - allowed_ips
 
     ApiKeyDetail:
       type: object

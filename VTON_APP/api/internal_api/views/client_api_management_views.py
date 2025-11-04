@@ -68,13 +68,18 @@ def create_api_key(request):
 
     Request Body:
         - name: string (required) - Unique name for the key
+        - expires_in_days: integer (optional, null = never expires)
+
+    Admin-Only Parameters:
         - rate_limit_per_minute: integer (optional, default: 100)
         - rate_limit_per_hour: integer (optional, default: 1000)
         - rate_limit_per_day: integer (optional, default: 10000)
         - monthly_quota: integer (optional, default: 500)
         - allowed_domains: array (optional, empty = all allowed)
         - allowed_ips: array (optional, empty = all allowed)
-        - expires_in_days: integer (optional, null = never expires)
+
+    Note: Non-admin users cannot set rate limits or domain/IP restrictions.
+    These must be configured by administrators.
 
     Response Codes:
         - API101: API key created successfully
@@ -82,6 +87,7 @@ def create_api_key(request):
         - API012: API key name already exists
         - API006: Error creating API key
         - SYS004: Validation error
+        - AUT002: Only admins can set rate limits or restrictions
     """
     serializer = APIKeyCreateSerializer(data=request.data, context={"request": request})
 
@@ -221,6 +227,8 @@ def update_api_key(request, key_id):
 
     Request Body:
         - status: string (optional) - active, inactive, suspended
+
+    Admin-Only Parameters:
         - rate_limit_per_minute: integer (optional)
         - rate_limit_per_hour: integer (optional)
         - rate_limit_per_day: integer (optional)
@@ -228,11 +236,15 @@ def update_api_key(request, key_id):
         - allowed_domains: array (optional)
         - allowed_ips: array (optional)
 
+    Note: Non-admin users can only change the status field.
+    Rate limits and domain/IP restrictions can only be modified by administrators.
+
     Response Codes:
         - API105: API key updated successfully
         - API001: API key not found
         - API008: Error updating API key
         - SYS004: Validation error
+        - AUT002: Only admins can modify rate limits and restrictions
     """
     try:
         api_key = APIKey.objects.get(user=request.user, key_id=key_id)
