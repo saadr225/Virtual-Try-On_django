@@ -47,12 +47,24 @@ info:
     email: support@example.com
   license:
     name: Proprietary
+  x-swagger-ui-config:
+    displayOperationId: true
+    tryItOutEnabled: false
+    deepLinking: true
+    presets:
+      - SwaggerUIBundle.presets.apis
+      - SwaggerUIBundle.SwaggerUIStandalonePreset
+    layout: "StandaloneLayout"
+  x-readme:
+    explorer-enabled: false
 
 servers:
   - url: https://your-domain.com/api/internal
     description: Production server (replace with your actual domain)
+    x-display: false
   - url: http://localhost:8000/api/internal
-    description: Development server
+    description: Development server (for reference only - use Postman)
+    x-display: false
 
 tags:
   - name: Authentication

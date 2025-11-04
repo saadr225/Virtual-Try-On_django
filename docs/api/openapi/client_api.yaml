@@ -55,18 +55,24 @@ info:
     email: support@example.com
   license:
     name: Proprietary
+  x-swagger-ui-config:
+    displayOperationId: true
+    tryItOutEnabled: false
+    deepLinking: true
+    presets:
+      - SwaggerUIBundle.presets.apis
+      - SwaggerUIBundle.SwaggerUIStandalonePreset
+    layout: "StandaloneLayout"
+  x-readme:
+    explorer-enabled: false
 
 servers:
   - url: https://your-domain.com/api/v1
     description: Production server (replace with your actual domain)
+    x-display: false
   - url: http://localhost:8000/api/v1
-    description: Development server
-
-# servers:
-#   - url: https://api.example.com/api/v1
-#     description: Production server
-#   - url: http://localhost:8000/api/v1
-#     description: Development server
+    description: Development server (for reference only - use Postman)
+    x-display: false
 
 tags:
   - name: Health
@@ -433,44 +439,45 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /virtual-tryon/requests/:
-    tags:
-      - Virtual Try-On
-    summary: List Recent Requests
-    description: |
-      List recent VTON requests with optional filtering.
+    get:
+      tags:
+        - Virtual Try-On
+      summary: List Recent Requests
+      description: |
+        List recent VTON requests with optional filtering.
 
-      **Use Cases:**
-      - View processing history
-      - Monitor request statuses
-      - Retrieve multiple requests at once
-      - Filter by status for specific workflows
+        **Use Cases:**
+        - View processing history
+        - Monitor request statuses
+        - Retrieve multiple requests at once
+        - Filter by status for specific workflows
 
-      **Authentication:** API key required in `X-API-Key` header.
+        **Authentication:** API key required in `X-API-Key` header.
 
-      **Access Control:** Only returns requests created with your API key.
+        **Access Control:** Only returns requests created with your API key.
 
-      **Pagination:** Use the `limit` parameter to control how many results are returned.
-    operationId: listRecentRequests
-    security:
-      - ApiKeyAuth: []
-    parameters:
-      - name: limit
-        in: query
-        description: Number of requests to return
-        schema:
-          type: integer
-          minimum: 1
-          maximum: 100
-          default: 10
-        example: 20
-      - name: status
-        in: query
-        description: Filter by status
-        schema:
-          type: string
-          enum: [pending, queued, processing, completed, failed, cancelled]
-        example: completed
-    responses:
+        **Pagination:** Use the `limit` parameter to control how many results are returned.
+      operationId: listRecentRequests
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of requests to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          example: 20
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [pending, queued, processing, completed, failed, cancelled]
+          example: completed
+      responses:
       "200":
         description: Requests retrieved successfully
         content:
