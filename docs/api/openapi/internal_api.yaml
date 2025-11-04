@@ -1707,6 +1707,13 @@ paths:
         - Plan API key creation
         - Monitor account usage
         - Understand billing implications
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/quota/me/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
       operationId: getMyQuota
       responses:
         "200":
@@ -1756,7 +1763,15 @@ paths:
       tags:
         - Admin
       summary: List All Users with Quotas
-      description: List all users and their API key quotas (Admin only)
+      description: |
+        List all users and their API key quotas (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/quotas/?page=1&limit=20" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: listAllUsersQuotas
       parameters:
         - name: user_type
@@ -1793,7 +1808,15 @@ paths:
       tags:
         - Admin
       summary: Search Users
-      description: Search for users by username, email, or name (Admin only)
+      description: |
+        Search for users by username, email, or name (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/search/?q=john&page=1&limit=10" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: searchUsers
       parameters:
         - name: q
@@ -1835,7 +1858,15 @@ paths:
       tags:
         - Admin
       summary: Get User Quota
-      description: Get specific user's API key quota settings (Admin only)
+      description: |
+        Get specific user's API key quota settings (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/quota/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: getUserQuota
       parameters:
         - name: username
@@ -1856,7 +1887,23 @@ paths:
       tags:
         - Admin
       summary: Update User Quota
-      description: Update user's API key quota settings (Admin only)
+      description: |
+        Update user's API key quota settings (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/api/internal/admin/users/john_doe/quota/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "max_api_keys": 10,
+            "requests_per_minute": 100,
+            "requests_per_hour": 1000,
+            "requests_per_day": 10000,
+            "monthly_quota": 1000000
+          }'
+        ```
       operationId: updateUserQuota
       parameters:
         - name: username
@@ -1883,7 +1930,15 @@ paths:
       tags:
         - Admin
       summary: Get User Details
-      description: Get comprehensive details about a specific user (Admin only)
+      description: |
+        Get comprehensive details about a specific user (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/details/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: getUserDetails
       parameters:
         - name: username
@@ -1904,7 +1959,15 @@ paths:
       tags:
         - Admin
       summary: List All API Keys
-      description: List all API keys across all users (Admin only)
+      description: |
+        List all API keys across all users (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/api-keys/?status=active&page=1&limit=20" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: listAllApiKeys
       parameters:
         - name: username
@@ -1939,7 +2002,21 @@ paths:
       tags:
         - Admin
       summary: Admin Update API Key
-      description: Update any API key with full control (Admin only)
+      description: |
+        Update any API key with full control (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/api/internal/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "status": "active",
+            "requests_per_minute": 150,
+            "requests_per_hour": 2000
+          }'
+        ```
       operationId: adminUpdateApiKey
       parameters:
         - name: key_id
@@ -1967,7 +2044,15 @@ paths:
       tags:
         - Admin
       summary: Admin Delete API Key
-      description: Delete any API key (Admin only)
+      description: |
+        Delete any API key (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X DELETE "https://your-domain.com/api/internal/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
       operationId: adminDeleteApiKey
       parameters:
         - name: key_id
@@ -1990,7 +2075,14 @@ paths:
       tags:
         - Documentation
       summary: API Documentation Info
-      description: Get information about available API documentation endpoints
+      description: |
+        Get information about available API documentation endpoints
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/docs/" \
+          -H "accept: application/json"
+        ```
       operationId: getApiDocsInfo
       security: []
       responses:
@@ -2073,6 +2165,13 @@ paths:
         - Use for API client generation
 
         The file is served directly without parsing, ensuring fast response times.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/docs/client-api-spec/" \
+          -H "accept: application/x-yaml" \
+          -o client_api.yaml
+        ```
       operationId: getClientApiSpec
       security: []
       responses:
@@ -2138,6 +2237,14 @@ paths:
         - Use for internal API documentation
 
         The file is served directly without parsing, ensuring fast response times.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/docs/internal-api-spec/" \
+          -H "accept: application/x-yaml" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -o internal_api.yaml
+        ```
       operationId: getInternalApiSpec
       security:
         - BearerAuth: []
