@@ -102,7 +102,6 @@ def virtual_tryon(request):
     Request Body (multipart/form-data):
         - person_image: File (required) - Image of the person
         - clothing_image: File (required) - Image of the clothing item
-        - instructions: string (optional) - Additional instructions for the VTON process
 
     Response Codes:
         - API107: VTON request submitted successfully
@@ -132,7 +131,6 @@ def virtual_tryon(request):
 
     person_image_file = vton_serializer.validated_data.get("person_image")
     clothing_image_file = vton_serializer.validated_data.get("clothing_image")
-    instructions = vton_serializer.validated_data.get("instructions", "")
 
     # Validate required files
     if not person_image_file or not clothing_image_file:
@@ -161,7 +159,6 @@ def virtual_tryon(request):
         person_image_size=person_image_size,
         clothing_image_size=clothing_image_size,
         metadata={
-            "instructions": instructions,
             "request_time": request_start.isoformat(),
         },
     )
@@ -194,7 +191,6 @@ def virtual_tryon(request):
                 metadata={
                     "person_image_size": person_image_size,
                     "clothing_image_size": clothing_image_size,
-                    "has_instructions": bool(instructions),
                 },
             )
         except Exception as e:
@@ -226,7 +222,7 @@ def virtual_tryon(request):
         logger.info(f"  Clothing: {clothing_image_absolute_path}")
 
         # Call the VTON controller with absolute paths
-        output_image = vton_controller.generate_virtual_tryon(person_image_absolute_path, clothing_image_absolute_path, instructions, False)  # cloths_on deprecated
+        output_image = vton_controller.generate_virtual_tryon(person_image_absolute_path, clothing_image_absolute_path, False)  # cloths_on deprecated
 
         processing_end = time.time()
         processing_duration = processing_end - processing_start

@@ -90,6 +90,12 @@ paths:
         Check the health status of the API service.
         Returns system metrics including uptime, CPU, and memory usage.
         This endpoint does not require authentication.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/v1/" \
+          -H "accept: application/json"
+        ```
       operationId: healthcheck
       responses:
         "200":
@@ -148,6 +154,15 @@ paths:
         - Recommended resolution: 512x512 to 1024x1024 pixels
 
         **Rate Limiting:** Subject to per-minute, per-hour, per-day limits and monthly quota.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/v1/virtual-tryon/process/" \
+          -H "accept: application/json" \
+          -H "X-API-Key: vton_sk_your_api_key_here" \
+          -F "person_image=@/path/to/person.jpg" \
+          -F "clothing_image=@/path/to/clothing.jpg"
+        ```
       operationId: processVirtualTryon
       requestBody:
         required: true
@@ -169,18 +184,12 @@ paths:
                   format: binary
                   description: Image of the clothing item (JPG, PNG, max 10MB)
                   example: "clothing.jpg"
-                instructions:
-                  type: string
-                  description: Optional processing instructions or preferences
-                  maxLength: 500
-                  example: "Ensure the clothing fits naturally"
             examples:
               basicRequest:
                 summary: Basic VTON request
                 value:
                   person_image: "Binary image data"
                   clothing_image: "Binary image data"
-                  instructions: "Make the fit look natural"
       responses:
         "200":
           description: VTON request processed successfully
@@ -359,6 +368,13 @@ paths:
         - `completed`: Successfully processed with result image
         - `failed`: Processing failed, check error_message
         - `cancelled`: Request was cancelled
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/v1/virtual-tryon/550e8400-e29b-41d4-a716-446655440000/status/" \
+          -H "accept: application/json" \
+          -H "X-API-Key: vton_sk_your_api_key_here"
+        ```
       operationId: getRequestStatus
       parameters:
         - name: request_id
@@ -449,6 +465,29 @@ paths:
         **Access Control:** Only returns requests created with your API key.
 
         **Pagination:** Use the `limit` parameter to control how many results are returned.
+
+        **Example cURL Requests:**
+
+        **List recent requests (default limit):**
+        ```bash
+        curl -X GET "https://your-domain.com/api/v1/virtual-tryon/requests/" \
+          -H "accept: application/json" \
+          -H "X-API-Key: vton_sk_your_api_key_here"
+        ```
+
+        **List with custom limit:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/v1/virtual-tryon/requests/?limit=50" \
+          -H "accept: application/json" \
+          -H "X-API-Key: vton_sk_your_api_key_here"
+        ```
+
+        **Filter by status:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/v1/virtual-tryon/requests/?status=completed&limit=20" \
+          -H "accept: application/json" \
+          -H "X-API-Key: vton_sk_your_api_key_here"
+        ```
       operationId: listRecentRequests
       parameters:
         - name: limit

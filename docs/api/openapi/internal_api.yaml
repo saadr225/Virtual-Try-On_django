@@ -99,6 +99,23 @@ paths:
         4. Returns user information and success message
 
         **Note:** New accounts may require email verification before full access.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/register/" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "johndoe",
+            "email": "john.doe@example.com",
+            "password": "SecurePass123!",
+            "password2": "SecurePass123!",
+            "first_name": "John",
+            "last_name": "Doe",
+            "phone_number": "+1234567890",
+            "user_type": "customer"
+          }'
+        ```
       operationId: register
       security: []
       requestBody:
@@ -191,6 +208,30 @@ paths:
         - Use access token in `Authorization: Bearer <token>` header
         - Use refresh token with `/auth/token/refresh/` when access token expires
         - Store tokens securely (access token in memory, refresh token in httpOnly cookie if possible)
+
+        **Example cURL Requests:**
+
+        **Login with username:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/login/" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "johndoe",
+            "password": "SecurePass123!"
+          }'
+        ```
+
+        **Login with email:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/login/" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "john.doe@example.com",
+            "password": "SecurePass123!"
+          }'
+        ```
       operationId: login
       security: []
       requestBody:
@@ -281,6 +322,17 @@ paths:
         Authenticate admin users ONLY and return JWT tokens.
         This endpoint is specifically for admin users (staff, superuser, or user_type='admin').
         Regular users will be rejected even with valid credentials.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/admin-login/" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "admin",
+            "password": "AdminPass123!"
+          }'
+        ```
       operationId: adminLogin
       security: []
       requestBody:
@@ -367,6 +419,17 @@ paths:
         - Only the refresh token is blacklisted (not the access token)
         - Access tokens expire naturally after 30 minutes
         - For complete logout, clear tokens from client storage
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/logout/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "refresh": "YOUR_REFRESH_TOKEN_HERE"
+          }'
+        ```
       operationId: logout
       requestBody:
         required: true
@@ -449,6 +512,16 @@ paths:
         }
         // Response contains new access and refresh tokens
         ```
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/token/refresh/" \
+          -H "accept: application/json" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "refresh": "YOUR_REFRESH_TOKEN_HERE"
+          }'
+        ```
       operationId: tokenRefresh
       security: []
       requestBody:
@@ -527,6 +600,13 @@ paths:
         - Check account status and permissions
         - Display quota information
         - Populate user settings forms
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/auth/me/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
       operationId: getUserInfo
       responses:
         "200":
@@ -585,6 +665,20 @@ paths:
         2. Updates user and UserData records
         3. Logs the profile update
         4. Returns updated user information
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/api/internal/auth/profile/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "first_name": "John",
+            "last_name": "Smith",
+            "email": "john.smith@example.com",
+            "phone_number": "+1987654321"
+          }'
+        ```
       operationId: updateProfile
       requestBody:
         required: true
@@ -644,6 +738,17 @@ paths:
         - Settings updates
 
         **Note:** Same validation rules apply to updated fields.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PATCH "https://your-domain.com/api/internal/auth/profile/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "email": "new.email@example.com"
+          }'
+        ```
       operationId: partialUpdateProfile
       requestBody:
         required: true
@@ -692,6 +797,19 @@ paths:
         **Security Note:** 
         - All active sessions remain valid after password change
         - Consider forcing re-login for enhanced security
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/change-password/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "old_password": "CurrentPass123!",
+            "new_password": "NewSecurePass456!",
+            "new_password2": "NewSecurePass456!"
+          }'
+        ```
       operationId: changePassword
       requestBody:
         required: true
@@ -773,6 +891,18 @@ paths:
         - Account becomes unusable immediately
         - All API keys are permanently deactivated
         - Cannot be undone by user (requires admin intervention)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/auth/delete-account/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "password": "CurrentPass123!",
+            "confirm": true
+          }'
+        ```
       operationId: deleteAccount
       requestBody:
         required: true
@@ -859,6 +989,13 @@ paths:
         - Current usage statistics
         - Rate limit configurations
         - Creation and last used timestamps
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/api-keys/?status=active&limit=20" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
       operationId: listApiKeys
       parameters:
         - name: status
@@ -958,6 +1095,18 @@ paths:
         - API key is shown only once on creation
         - Store it securely - it cannot be retrieved later
         - Use descriptive names for key identification
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/api-keys/create/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "name": "My Production API Key",
+            "expires_in_days": 365
+          }'
+        ```
       operationId: createApiKey
       requestBody:
         required: true
@@ -1054,6 +1203,13 @@ paths:
         - Timestamps
 
         **Security Note:** Full API key is not returned (only preview).
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
       operationId: getApiKeyDetail
       parameters:
         - name: key_id
@@ -1114,6 +1270,17 @@ paths:
         **Access Control:** Users can only update their own API keys.
 
         **Important:** Some changes may take effect immediately, others may require key regeneration.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "status": "inactive"
+          }'
+        ```
       operationId: updateApiKey
       parameters:
         - name: key_id
@@ -1190,6 +1357,17 @@ paths:
         - Change only the status
         - Update single rate limit
         - Modify only domain restrictions
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PATCH "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "status": "suspended"
+          }'
+        ```
       operationId: partialUpdateApiKey
       parameters:
         - name: key_id
@@ -1245,6 +1423,13 @@ paths:
         - All future requests with this key will be rejected
         - Existing usage logs are retained for audit purposes
         - Consider suspending the key first if unsure about deletion
+
+        **Example cURL Request:**
+        ```bash
+        curl -X DELETE "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
       operationId: deleteApiKey
       parameters:
         - name: key_id
@@ -1316,6 +1501,17 @@ paths:
         - Regenerate keys periodically for security
         - Update all applications immediately after regeneration
         - Have backup keys ready during transition
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/regenerate/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "confirm": true
+          }'
+        ```
       operationId: regenerateApiKey
       parameters:
         - name: key_id
