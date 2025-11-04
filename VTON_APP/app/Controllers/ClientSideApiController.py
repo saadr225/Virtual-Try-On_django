@@ -51,22 +51,33 @@ class ClientSideApiController:
     def check_domain_whitelist(api_key, domain):
         """
         Check if domain is whitelisted for the API key.
+        Empty list means all domains are allowed.
 
         Args:
             api_key (APIKey): The API key object
-            domain (str): The domain to check
+            domain (str): The domain to check (may include port)
 
         Returns:
             tuple: (is_allowed: bool, error_code: dict or None)
         """
-        if api_key.allowed_domains and domain not in api_key.allowed_domains:
-            return False, get_response_code("API_DOMAIN_NOT_WHITELISTED")
-        return True, None
+        # Empty list or None means all domains allowed
+        if not api_key.allowed_domains:
+            return True, None
+
+        # Strip port from domain for comparison
+        domain_without_port = domain.split(":")[0] if domain else ""
+
+        # Check both with and without port
+        if domain in api_key.allowed_domains or domain_without_port in api_key.allowed_domains:
+            return True, None
+
+        return False, get_response_code("API_DOMAIN_NOT_WHITELISTED")
 
     @staticmethod
     def check_ip_whitelist(api_key, ip_address):
         """
         Check if IP address is whitelisted for the API key.
+        Empty list means all IPs are allowed.
 
         Args:
             api_key (APIKey): The API key object
@@ -75,7 +86,11 @@ class ClientSideApiController:
         Returns:
             tuple: (is_allowed: bool, error_code: dict or None)
         """
-        if api_key.allowed_ips and ip_address not in api_key.allowed_ips:
+        # Empty list or None means all IPs allowed
+        if not api_key.allowed_ips:
+            return True, None
+
+        if ip_address not in api_key.allowed_ips:
             return False, get_response_code("API_IP_NOT_WHITELISTED")
         return True, None
 
@@ -131,13 +146,45 @@ class ClientSideApiController:
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        # Count requests this month
+        # Count requests this month for this specific API key
         this_month_count = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=month_start).count()
 
         if this_month_count >= api_key.monthly_quota:
             return False, get_response_code("API_MONTHLY_QUOTA_EXCEEDED")
 
         return True, None
+
+    @staticmethod
+    def check_user_quota(api_key):
+        """
+        Check if user has exceeded their total monthly quota across all API keys.
+
+        Args:
+            api_key (APIKey): The API key object (to get user)
+
+        Returns:
+            tuple: (is_within_quota: bool, error_code: dict or None)
+        """
+        try:
+            from app.models import UserData
+
+            user_data = UserData.objects.get(user=api_key.user)
+
+            # Get cumulative usage across all user's API keys
+            cumulative_usage = user_data.get_cumulative_monthly_quota_used()
+
+            if cumulative_usage >= user_data.user_monthly_quota:
+                return False, get_response_code("USER_QUOTA_EXCEEDED")
+
+            return True, None
+
+        except UserData.DoesNotExist:
+            # If no UserData, allow request (shouldn't happen but graceful degradation)
+            logger.warning(f"No UserData found for user {api_key.user.username}")
+            return True, None
+        except Exception as e:
+            logger.error(f"Error checking user quota: {str(e)}")
+            return True, None  # Allow request on error
 
     @staticmethod
     def log_api_usage(api_key, request, response):
@@ -228,7 +275,7 @@ class ClientSideApiController:
         api_key = result
 
         # Check domain whitelist
-        domain = request.META.get("HTTP_HOST")
+        domain = request.META.get("HTTP_HOST", "")
         is_allowed, error = ClientSideApiController.check_domain_whitelist(api_key, domain)
         if not is_allowed:
             return False, error, 403
@@ -244,9 +291,14 @@ class ClientSideApiController:
         if not is_within_limits:
             return False, error, 429
 
-        # Check monthly quota
+        # Check API key monthly quota
         is_within_quota, error = ClientSideApiController.check_monthly_quota(api_key)
         if not is_within_quota:
+            return False, error, 429
+
+        # Check user-level cumulative monthly quota
+        is_within_user_quota, error = ClientSideApiController.check_user_quota(api_key)
+        if not is_within_user_quota:
             return False, error, 429
 
         # All checks passed
