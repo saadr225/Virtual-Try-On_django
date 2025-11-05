@@ -25,7 +25,6 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         "/admin/",
         "/static/",
         "/media/",
-        "/api/v1/",  # Healthcheck endpoint at root of client API
     ]
 
     def process_request(self, request):
@@ -42,13 +41,10 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         if any(request.path.startswith(path) for path in self.EXEMPT_PATHS):
             return None
 
-        # Only validate Client API endpoints (and exclude the healthcheck at root)
+        # Only validate Client API endpoints
         if not request.path.startswith("/api/v1/"):
             return None
 
-        # Exempt the healthcheck endpoint specifically
-        if request.path == "/api/v1/" or request.path == "/api/v1":
-            return None
 
         # Get API key from header
         api_key_str = request.META.get("HTTP_X_API_KEY")
