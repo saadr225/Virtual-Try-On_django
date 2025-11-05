@@ -66,13 +66,13 @@ info:
   x-readme:
     explorer-enabled: false
 
-servers:
-  - url: https://your-domain.com/api/v1
-    description: Production server (replace with your actual domain)
-    x-display: false
-  - url: http://localhost:8000/api/v1
-    description: Development server (for reference only - use Postman)
-    x-display: false
+# servers:
+#   - url: https://your-domain.com/api/v1
+#     description: Production server (replace with your actual domain)
+#     x-display: false
+#   - url: http://localhost:8000/api/v1
+#     description: Development server (for reference only - use Postman)
+#     x-display: false
 
 tags:
   - name: Health
@@ -81,32 +81,33 @@ tags:
     description: VTON processing endpoints
 
 paths:
-  /:
+  /health/:
     get:
       tags:
         - Health
-      summary: Health Check
+      summary: Root Health Check (no auth)
       description: |
-        Check the health status of the API service.
-        Returns system metrics including uptime, CPU, and memory usage.
-        This endpoint does not require authentication.
+        Check the overall service health at the application root. This endpoint is
+        available at the server root (`/health/`) and does not require an API key.
 
-        **Example cURL Request:**
+        Use this endpoint for load-balancers and external monitoring systems.
+
+        **Example cURL Request (root):**
         ```bash
-        curl -X GET "https://your-domain.com/api/v1/" \
+        curl -X GET "https://your-domain.com/health/" \
           -H "accept: application/json"
         ```
-      operationId: healthcheck
+      operationId: rootHealthcheck
       responses:
         "200":
-          description: Service is healthy
+          description: Service is healthy (root)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthCheckResponse"
               examples:
-                healthy:
-                  summary: Service health status
+                healthy_root:
+                  summary: Root service health status
                   value:
                     status: "healthy"
                     timestamp: "2025-11-03T10:30:00Z"
@@ -115,14 +116,6 @@ paths:
                     memory_usage_percent: 60.2
                     total_memory_gb: 16.0
                     available_memory_gb: 6.37
-              example:
-                status: "healthy"
-                timestamp: "2025-11-03T10:30:00Z"
-                uptime: "5 days, 3:45:12"
-                cpu_usage_percent: 25.5
-                memory_usage_percent: 60.2
-                total_memory_gb: 16.0
-                available_memory_gb: 6.37
 
   /virtual-tryon/process/:
     post:

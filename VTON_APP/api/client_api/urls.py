@@ -5,7 +5,6 @@ app_name = "client_api"
 
 # from rest_framework_simplejwt.views import TokenRefreshView
 urlpatterns = [
-    path("", healthcheck_views.healthcheck, name="healthcheck"),  # Healthcheck endpoint
     # virtual tryon views
     path("virtual-tryon/process/", semantic_views.virtual_tryon, name="virtual-tryon"),  # Process try-on request
     path("virtual-tryon/<uuid:request_id>/status/", semantic_views.get_request_status, name="vton-request-status"),  # Get status of a specific request

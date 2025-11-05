@@ -58,13 +58,13 @@ info:
   x-readme:
     explorer-enabled: false
 
-servers:
-  - url: https://your-domain.com/api/internal
-    description: Production server (replace with your actual domain)
-    x-display: false
-  - url: http://localhost:8000/api/internal
-    description: Development server (for reference only - use Postman)
-    x-display: false
+# servers:
+#   - url: https://your-domain.com/api/internal
+#     description: Production server (replace with your actual domain)
+#     x-display: false
+#   - url: http://localhost:8000/api/internal
+#     description: Development server (for reference only - use Postman)
+#     x-display: false
 
 tags:
   - name: Authentication
