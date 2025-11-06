@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.db.models import Q, Count
 from app.models import APIKey, AuditLog, APIUsageLog, DailyUsageStats, UserData
 from app.Controllers.ResponseCodesController import get_response_code
+from api.internal_api.utils.permissions import IsNotAdminUser
 from api.internal_api.serializers.client_api_management_seiralizers import (
     APIKeyCreateSerializer,
     APIKeyListSerializer,
@@ -58,11 +59,13 @@ def create_response(code_key: str, data: dict = None, http_status: int = None):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def create_api_key(request):
     """
     Create a new API key for the authenticated user.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     POST /internal/api/api-keys/create/
 
@@ -129,11 +132,13 @@ def create_api_key(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def list_api_keys(request):
     """
     List all API keys for the authenticated user.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     GET /internal/api/api-keys/
 
@@ -187,11 +192,13 @@ def list_api_keys(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def get_api_key_detail(request, key_id):
     """
     Get detailed information about a specific API key.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     GET /internal/api/api-keys/{key_id}/
 
@@ -217,11 +224,13 @@ def get_api_key_detail(request, key_id):
 
 
 @api_view(["PUT", "PATCH"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def update_api_key(request, key_id):
     """
     Update API key settings.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     PUT/PATCH /internal/api/api-keys/{key_id}/
 
@@ -282,11 +291,13 @@ def update_api_key(request, key_id):
 
 
 @api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def delete_api_key(request, key_id):
     """
     Delete an API key (soft delete - marks as inactive).
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     DELETE /internal/api/api-keys/{key_id}/
 
@@ -327,11 +338,13 @@ def delete_api_key(request, key_id):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def regenerate_api_key(request, key_id):
     """
     Regenerate/rotate an API key (invalidates old key).
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     POST /internal/api/api-keys/{key_id}/regenerate/
 
@@ -383,11 +396,13 @@ def regenerate_api_key(request, key_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def get_api_key_stats(request, key_id):
     """
     Get usage statistics for an API key.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     GET /internal/api/api-keys/{key_id}/stats/
 
@@ -434,11 +449,13 @@ def get_api_key_stats(request, key_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsNotAdminUser])
 @csrf_exempt
 def get_my_quota(request):
     """
     Get current user's API key quota information.
+
+    Admin users cannot use this endpoint - they should use admin API key management.
 
     GET /internal/api/quota/me/
 

@@ -117,6 +117,20 @@ class IsAdminUser(BasePermission):
         return is_admin_user(request.user)
 
 
+class IsNotAdminUser(BasePermission):
+    """
+    DRF Permission class: Only non-admin users are allowed.
+    Prevents admin users from accessing regular user endpoints.
+
+    Usage:
+        class MyView(APIView):
+            permission_classes = [IsAuthenticated, IsNotAdminUser]
+    """
+
+    def has_permission(self, request, view):
+        return not is_admin_user(request.user)
+
+
 class CanModifyQuotas(BasePermission):
     """
     DRF Permission class: Only users who can modify quotas are allowed.

@@ -161,7 +161,10 @@ def register(request):
 @csrf_exempt
 def login_view(request):
     """
-    Authenticate user and return JWT tokens.
+    Authenticate non-admin users and return JWT tokens.
+
+    This endpoint is for regular users (customer, store_owner).
+    Admin users should use the /admin-login endpoint.
 
     POST /internal/api/auth/login
 
@@ -170,7 +173,7 @@ def login_view(request):
         - password: string (required)
 
     Response:
-        - user: User data object
+        - user: User data object (includes user_type field)
         - access: JWT access token (30 minutes validity)
         - refresh: JWT refresh token (7 days validity)
 
@@ -179,11 +182,13 @@ def login_view(request):
         - USR008: Username is required
         - USR009: Password is required
         - AUT003: Invalid credentials
+        - AUT004: Access denied (admin user attempting to login via non-admin endpoint)
         - USR015: User account is inactive
         - AUT006: Account suspended
         - SYS004: Validation error
 
     Security Features:
+        - Prevents admin users from logging in (redirects to admin endpoint)
         - JWT tokens with automatic rotation on refresh
         - Token blacklisting after logout
         - Account suspension check
@@ -224,6 +229,36 @@ def login_view(request):
         except UserData.DoesNotExist:
             # Create UserData if it doesn't exist
             UserData.objects.create(user=user)
+
+        # ADMIN CHECK - Reject admin users from this endpoint
+        is_admin = False
+
+        # Check Django admin status
+        if user.is_staff or user.is_superuser:
+            is_admin = True
+
+        # Check user_type in UserData
+        try:
+            if user.userdata.user_type == "admin":
+                is_admin = True
+        except UserData.DoesNotExist:
+            pass
+
+        if is_admin:
+            # Log admin login attempt via non-admin endpoint
+            AuditLog.objects.create(
+                user=user,
+                action="login_denied",
+                resource_type="User",
+                resource_id=str(user.id),
+                description=f"Admin user {username} attempted to login via non-admin endpoint",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+
+            logger.warning(f"Admin user attempted non-admin login: {username}")
+
+            return create_response("ACCESS_DENIED", {"detail": "Admin users must use the /admin-login endpoint."}, http_status=status.HTTP_403_FORBIDDEN)
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
