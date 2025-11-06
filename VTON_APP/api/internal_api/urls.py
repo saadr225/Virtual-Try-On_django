@@ -26,11 +26,25 @@ urlpatterns = [
     # User Quota endpoints (JWT authentication required)
     path("quota/me/", client_api_management_views.get_my_quota, name="get-my-quota"),  # Get current user's quota info
     # Admin endpoints (Admin only - JWT authentication + admin permission required)
+    # User Management
+    path("admin/users/", admin_views.list_all_users, name="admin-list-users"),  # List all users with filters
+    path("admin/users/create/", admin_views.create_user, name="admin-create-user"),  # Create new user
+    path("admin/users/statistics/", admin_views.get_user_statistics, name="admin-user-statistics"),  # Get user statistics
+    path("admin/users/id/<int:user_id>/", admin_views.get_user_by_id, name="admin-get-user-by-id"),  # Get user by ID
+    path("admin/users/<str:username>/", admin_views.get_user_details, name="admin-get-user-details"),  # Get user by username (comprehensive)
+    path("admin/users/<str:username>/update/", admin_views.update_user, name="admin-update-user"),  # Update user info
+    path("admin/users/<str:username>/delete/", admin_views.delete_user, name="admin-delete-user"),  # Delete/deactivate user
+    path("admin/users/<str:username>/suspend/", admin_views.suspend_user, name="admin-suspend-user"),  # Suspend/unsuspend user
+    path("admin/users/<str:username>/verify/", admin_views.verify_user, name="admin-verify-user"),  # Verify/unverify user
+    path("admin/users/<str:username>/premium/", admin_views.set_user_premium, name="admin-set-premium"),  # Set premium status
+    path("admin/users/<str:username>/change-password/", admin_views.change_user_password, name="admin-change-password"),  # Change user password
+    path("admin/users/<str:username>/api-keys/suspend/", admin_views.suspend_user_api_keys, name="admin-suspend-user-keys"),  # Suspend all user API keys
+    # Quota Management
     path("admin/users/quotas/", admin_views.list_all_users_quotas, name="admin-list-user-quotas"),  # List all users with quotas
     path("admin/users/search/", admin_views.search_users, name="admin-search-users"),  # Search for users
     path("admin/users/<str:username>/quota/", admin_views.get_user_quota, name="admin-get-user-quota"),  # Get specific user quota
     path("admin/users/<str:username>/quota/update/", admin_views.update_user_quota, name="admin-update-user-quota"),  # Update user quota
-    path("admin/users/<str:username>/details/", admin_views.get_user_details, name="admin-get-user-details"),  # Get comprehensive user details
+    # API Key Management
     path("admin/api-keys/", admin_views.list_all_api_keys, name="admin-list-all-api-keys"),  # List all API keys (all users)
     path("admin/api-keys/<uuid:key_id>/update/", admin_views.admin_update_api_key, name="admin-update-api-key"),  # Admin update any API key
     path("admin/api-keys/<uuid:key_id>/delete/", admin_views.admin_delete_api_key, name="admin-delete-api-key"),  # Admin delete any API key
