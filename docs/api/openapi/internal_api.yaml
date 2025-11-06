@@ -58,14 +58,6 @@ info:
   x-readme:
     explorer-enabled: false
 
-# servers:
-#   - url: https://your-domain.com/api/internal
-#     description: Production server (replace with your actual domain)
-#     x-display: false
-#   - url: http://localhost:8000/api/internal
-#     description: Development server (for reference only - use Postman)
-#     x-display: false
-
 tags:
   - name: Authentication
     description: User registration, login, logout, and token management
@@ -1758,6 +1750,490 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # Admin Endpoints
+  /admin/users/:
+    get:
+      tags:
+        - Admin
+      summary: List All Users
+      description: |
+        List all users in the system with filtering and pagination (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/?user_type=customer&is_active=true&page=1&limit=20" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: listAllUsers
+      parameters:
+        - name: user_type
+          in: query
+          description: Filter by user type
+          schema:
+            type: string
+            enum: [customer, store_owner, admin]
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: is_suspended
+          in: query
+          description: Filter by suspension status
+          schema:
+            type: boolean
+        - name: is_verified
+          in: query
+          description: Filter by verification status
+          schema:
+            type: boolean
+        - name: is_premium
+          in: query
+          description: Filter by premium status
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          description: Search username, email, first/last name
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserListResponse"
+        "403":
+          description: Access denied (not admin)
+
+  /admin/users/create/:
+    post:
+      tags:
+        - Admin
+      summary: Create New User
+      description: |
+        Create a new user account (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/create/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "newuser",
+            "email": "newuser@example.com",
+            "password": "SecurePassword123",
+            "first_name": "John",
+            "last_name": "Doe",
+            "user_type": "customer",
+            "is_verified": false,
+            "phone_number": "+1234567890"
+          }'
+        ```
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserCreateRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "400":
+          description: Validation error
+
+  /admin/users/statistics/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Statistics
+      description: |
+        Get overall user statistics and breakdown (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/statistics/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: getUserStatistics
+      responses:
+        "200":
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStatisticsResponse"
+
+  /admin/users/id/{user_id}/:
+    get:
+      tags:
+        - Admin
+      summary: Get User by ID
+      description: |
+        Get user information by user ID (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/id/42/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: getUserById
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "404":
+          description: User not found
+
+  /admin/users/{username}/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Details
+      description: |
+        Get comprehensive details about a specific user (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: getUserDetails
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "404":
+          description: User not found
+
+  /admin/users/{username}/update/:
+    put:
+      tags:
+        - Admin
+      summary: Update User Information
+      description: |
+        Update user information including profile data and settings (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/api/internal/admin/users/john_doe/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "email": "newemail@example.com",
+            "first_name": "Jane",
+            "user_type": "store_owner",
+            "is_verified": true,
+            "phone_number": "+1234567890",
+            "city": "New York",
+            "country": "USA"
+          }'
+        ```
+      operationId: updateUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdateRequest"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "404":
+          description: User not found
+
+  /admin/users/{username}/suspend/:
+    post:
+      tags:
+        - Admin
+      summary: Suspend/Unsuspend User
+      description: |
+        Suspend or unsuspend a user account (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/suspend/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "is_suspended": true,
+            "suspension_reason": "Violation of terms of service"
+          }'
+        ```
+      operationId: suspendUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserSuspendRequest"
+      responses:
+        "200":
+          description: Suspension status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error
+
+  /admin/users/{username}/verify/:
+    post:
+      tags:
+        - Admin
+      summary: Verify/Unverify User
+      description: |
+        Verify or unverify a user account (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/verify/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{"is_verified": true}'
+        ```
+      operationId: verifyUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_verified:
+                  type: boolean
+      responses:
+        "200":
+          description: Verification status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/premium/:
+    post:
+      tags:
+        - Admin
+      summary: Set User Premium Status
+      description: |
+        Grant or remove premium status for a user (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/premium/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "is_premium": true,
+            "premium_expiry": "2025-12-31T23:59:59Z"
+          }'
+        ```
+      operationId: setUserPremium
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserPremiumRequest"
+      responses:
+        "200":
+          description: Premium status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/change-password/:
+    post:
+      tags:
+        - Admin
+      summary: Change User Password
+      description: |
+        Change a user's password (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/change-password/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{"new_password": "NewSecurePassword123"}'
+        ```
+      operationId: changeUserPassword
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/delete/:
+    delete:
+      tags:
+        - Admin
+      summary: Delete/Deactivate User
+      description: |
+        Delete or deactivate a user account (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X DELETE "https://your-domain.com/api/internal/admin/users/john_doe/delete/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: deleteUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hard_delete
+          in: query
+          description: Permanent deletion (superuser only)
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: User deleted/deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: Access denied
+
+  /admin/users/{username}/api-keys/suspend/:
+    post:
+      tags:
+        - Admin
+      summary: Suspend All User API Keys
+      description: |
+        Suspend or activate all API keys for a user (Admin only)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/api-keys/suspend/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "action": "suspend",
+            "reason": "Account under review"
+          }'
+        ```
+      operationId: suspendUserApiKeys
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSuspendApiKeysRequest"
+      responses:
+        "200":
+          description: API keys status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # User Quota Management Endpoints
   /admin/users/quotas/:
     get:
       tags:
@@ -1898,10 +2374,9 @@ paths:
           -H "Content-Type: application/json" \
           -d '{
             "max_api_keys": 10,
-            "requests_per_minute": 100,
-            "requests_per_hour": 1000,
-            "requests_per_day": 10000,
-            "monthly_quota": 1000000
+            "user_monthly_quota": 50000,
+            "default_rate_limit_per_minute": 200,
+            "default_rate_limit_per_hour": 2000
           }'
         ```
       operationId: updateUserQuota
@@ -1925,35 +2400,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserQuotaResponse"
 
-  /admin/users/{username}/details/:
-    get:
-      tags:
-        - Admin
-      summary: Get User Details
-      description: |
-        Get comprehensive details about a specific user (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/details/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: getUserDetails
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: User details retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserDetailsResponse"
-
+  # API Key Management Endpoints
   /admin/api-keys/:
     get:
       tags:
@@ -2012,9 +2459,9 @@ paths:
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
           -d '{
-            "status": "active",
-            "requests_per_minute": 150,
-            "requests_per_hour": 2000
+            "status": "suspended",
+            "rate_limit_per_minute": 150,
+            "rate_limit_per_hour": 2000
           }'
         ```
       operationId: adminUpdateApiKey
@@ -2813,6 +3260,317 @@ components:
             type: object
         pagination:
           $ref: "#/components/schemas/Pagination"
+
+    # New Admin User Management Schemas
+    AdminUserListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUserListItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AdminUserListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+        date_joined:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        user_type:
+          type: string
+          enum: [customer, store_owner, admin]
+        is_verified:
+          type: boolean
+        is_premium:
+          type: boolean
+        is_suspended:
+          type: boolean
+        api_key_count:
+          type: integer
+        last_login_at:
+          type: string
+          format: date-time
+
+    AdminUserDetailResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/AdminUserDetail"
+
+    AdminUserDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        is_active:
+          type: boolean
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+        date_joined:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        userdata:
+          $ref: "#/components/schemas/UserDataDetail"
+
+    UserDataDetail:
+      type: object
+      properties:
+        user_type:
+          type: string
+          enum: [customer, store_owner, admin]
+        is_verified:
+          type: boolean
+        is_premium:
+          type: boolean
+        premium_expiry:
+          type: string
+          format: date-time
+        phone_number:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+        is_active:
+          type: boolean
+        is_suspended:
+          type: boolean
+        suspension_reason:
+          type: string
+        suspended_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+        max_api_keys:
+          type: integer
+        api_key_generation_enabled:
+          type: boolean
+        user_monthly_quota:
+          type: integer
+        default_rate_limit_per_minute:
+          type: integer
+        default_rate_limit_per_hour:
+          type: integer
+        default_rate_limit_per_day:
+          type: integer
+        default_monthly_quota:
+          type: integer
+        metadata:
+          type: object
+
+    AdminUserCreateRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        user_type:
+          type: string
+          enum: [customer, store_owner, admin]
+          default: customer
+        is_staff:
+          type: boolean
+          default: false
+        is_superuser:
+          type: boolean
+          default: false
+        is_verified:
+          type: boolean
+          default: false
+        phone_number:
+          type: string
+          maxLength: 20
+
+    AdminUserUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        is_active:
+          type: boolean
+        is_staff:
+          type: boolean
+        is_superuser:
+          type: boolean
+        user_type:
+          type: string
+          enum: [customer, store_owner, admin]
+        is_verified:
+          type: boolean
+        is_premium:
+          type: boolean
+        premium_expiry:
+          type: string
+          format: date-time
+        phone_number:
+          type: string
+          maxLength: 20
+        city:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          maxLength: 100
+        country:
+          type: string
+          maxLength: 100
+        postal_code:
+          type: string
+          maxLength: 20
+        metadata:
+          type: object
+
+    AdminUserSuspendRequest:
+      type: object
+      required:
+        - is_suspended
+      properties:
+        is_suspended:
+          type: boolean
+        suspension_reason:
+          type: string
+          description: Required when suspending a user
+
+    AdminUserPremiumRequest:
+      type: object
+      required:
+        - is_premium
+      properties:
+        is_premium:
+          type: boolean
+        premium_expiry:
+          type: string
+          format: date-time
+          description: Required when granting premium status
+
+    AdminSuspendApiKeysRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum: [suspend, activate]
+        reason:
+          type: string
+          description: Reason for suspension/activation
+
+    UserStatisticsResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        statistics:
+          $ref: "#/components/schemas/UserStatistics"
+
+    UserStatistics:
+      type: object
+      properties:
+        total_users:
+          type: integer
+        active_users:
+          type: integer
+        suspended_users:
+          type: integer
+        verified_users:
+          type: integer
+        premium_users:
+          type: integer
+        users_by_type:
+          type: object
+          properties:
+            customer:
+              type: integer
+            store_owner:
+              type: integer
+            admin:
+              type: integer
+        new_users_last_30_days:
+          type: integer
+        total_api_keys:
+          type: integer
+        active_api_keys:
+          type: integer
 
     # Common Schemas
     SuccessResponse:
