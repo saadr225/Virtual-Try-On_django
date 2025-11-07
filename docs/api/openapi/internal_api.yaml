@@ -545,7 +545,7 @@ paths:
                 success:
                   summary: Successful token refresh
                   value:
-                    code: "SUCCESS"
+                    code: "DATA_RETRIEVED"
                     message: "Token refreshed successfully"
                     access: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...new"
                     refresh: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...new"
@@ -1025,7 +1025,7 @@ paths:
                 apiKeyList:
                   summary: List of user's API keys
                   value:
-                    code: "DATA_RETRIEVED"
+                    code: "API_KEYS_FETCHED"
                     message: "API keys retrieved successfully"
                     api_keys:
                       - key_id: "550e8400-e29b-41d4-a716-446655440000"
@@ -1134,7 +1134,7 @@ paths:
                 keyCreated:
                   summary: API key created successfully
                   value:
-                    code: "RESOURCE_CREATED"
+                    code: "API_KEY_CREATED"
                     message: "API key created successfully"
                     api_key:
                       key_id: "550e8400-e29b-41d4-a716-446655440000"
@@ -1219,6 +1219,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+              examples:
+                apiKeyDetail:
+                  summary: API key details
+                  value:
+                    code: "API_KEY_FETCHED"
+                    message: "API key details retrieved successfully"
+                    api_key:
+                      key_id: "550e8400-e29b-41d4-a716-446655440000"
+                      name: "Production Key"
+                      api_key_preview: "vton_sk_1234...abcd"
+                      status: "active"
+                      created_at: "2025-01-01T00:00:00Z"
+                      last_used_at: "2025-11-03T09:00:00Z"
+                      expires_at: null
+                      rate_limit_per_minute: 100
+                      rate_limit_per_hour: 1000
+                      rate_limit_per_day: 10000
+                      monthly_quota: 500
+                      total_requests: 1250
+                      requests_this_month: 450
+                      allowed_domains: []
+                      allowed_ips: []
         "401":
           description: Authentication required
           content:
@@ -1309,6 +1331,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+              examples:
+                apiKeyUpdated:
+                  summary: API key updated successfully
+                  value:
+                    code: "API_KEY_UPDATED"
+                    message: "API key updated successfully"
+                    api_key:
+                      key_id: "550e8400-e29b-41d4-a716-446655440000"
+                      name: "Production Key"
+                      api_key_preview: "vton_sk_1234...abcd"
+                      status: "active"
+                      created_at: "2025-01-01T00:00:00Z"
+                      last_used_at: "2025-11-03T09:00:00Z"
+                      expires_at: null
+                      rate_limit_per_minute: 100
+                      rate_limit_per_hour: 1000
+                      rate_limit_per_day: 10000
+                      monthly_quota: 500
+                      total_requests: 1250
+                      requests_this_month: 450
+                      allowed_domains: []
+                      allowed_ips: []
         "400":
           description: Validation error
           content:
@@ -1440,7 +1484,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
               example:
-                code: "RESOURCE_DELETED"
+                code: "API_KEY_DELETED"
                 message: "API key deleted successfully"
         "401":
           description: Authentication required
@@ -1637,8 +1681,8 @@ paths:
                 keyStats:
                   summary: API key usage statistics
                   value:
-                    code: "DATA_RETRIEVED"
-                    message: "API key statistics retrieved successfully"
+                    code: "USAGE_STATS_FETCHED"
+                    message: "Usage statistics fetched successfully"
                     stats:
                       key_id: "550e8400-e29b-41d4-a716-446655440000"
                       name: "Production API Key"
@@ -1815,6 +1859,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserListResponse"
+              examples:
+                userList:
+                  summary: List of users
+                  value:
+                    code: "LIST_FETCHED"
+                    message: "List fetched successfully"
         "403":
           description: Access denied (not admin)
 
@@ -1857,6 +1907,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserDetailResponse"
+              examples:
+                userCreated:
+                  summary: User created successfully
+                  value:
+                    code: "RESOURCE_CREATED"
+                    message: "Resource created successfully"
         "400":
           description: Validation error
 
@@ -1882,6 +1938,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserStatisticsResponse"
+              examples:
+                userStats:
+                  summary: User statistics
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "Data retrieved successfully"
 
   /admin/users/id/{user_id}/:
     get:
@@ -1912,6 +1974,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserDetailResponse"
+              examples:
+                userDetail:
+                  summary: User details
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "Data retrieved successfully"
         "404":
           description: User not found
 
@@ -1943,6 +2011,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserDetailResponse"
+              examples:
+                userDetails:
+                  summary: User details
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "Data retrieved successfully"
         "404":
           description: User not found
 
@@ -1990,6 +2064,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserDetailResponse"
+              examples:
+                userUpdated:
+                  summary: User updated successfully
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "Resource updated successfully"
         "404":
           description: User not found
 
@@ -2032,6 +2112,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                userSuspended:
+                  summary: User suspended
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User suspended successfully"
+                    is_suspended: true
+                    suspension_reason: "Violation of terms of service"
+                userUnsuspended:
+                  summary: User unsuspended
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User unsuspended successfully"
+                    is_suspended: false
         "400":
           description: Validation error
 
@@ -2074,6 +2168,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                userVerified:
+                  summary: User verified
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User verified successfully"
+                    is_verified: true
+                userUnverified:
+                  summary: User unverified
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User unverified successfully"
+                    is_verified: false
 
   /admin/users/{username}/premium/:
     post:
@@ -2114,6 +2221,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                premiumGranted:
+                  summary: Premium status granted
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "Premium status granted successfully"
+                    is_premium: true
+                    premium_expiry: "2025-12-31T23:59:59Z"
+                premiumRevoked:
+                  summary: Premium status revoked
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "Premium status revoked successfully"
+                    is_premium: false
 
   /admin/users/{username}/change-password/:
     post:
@@ -2145,9 +2266,9 @@ paths:
             schema:
               type: object
               properties:
-                new_password:
-                  type: string
-                  minLength: 8
+        new_password:
+          type: string
+          minLength: 8
       responses:
         "200":
           description: Password changed successfully
@@ -2155,7 +2276,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
-
+              examples:
+                passwordChanged:
+                  summary: Password changed
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "Password changed successfully"
   /admin/users/{username}/delete/:
     delete:
       tags:
@@ -2190,6 +2316,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                userDeactivated:
+                  summary: User deactivated
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User deactivated successfully"
+                userDeleted:
+                  summary: User permanently deleted
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User permanently deleted successfully"
         "403":
           description: Access denied
 
@@ -2232,6 +2369,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                apiKeysSuspended:
+                  summary: API keys suspended
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "All user API keys suspended successfully"
+                apiKeysActivated:
+                  summary: API keys activated
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "All user API keys activated successfully"
 
   # User Quota Management Endpoints
   /admin/users/quotas/:
@@ -2272,6 +2420,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserQuotaListResponse"
+              examples:
+                usersQuotasList:
+                  summary: Users quotas list
+                  value:
+                    code: "LIST_FETCHED"
+                    message: "Users quotas retrieved successfully"
+                    users: []
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total: 0
+                      pages: 0
         "403":
           description: Access denied (not admin)
           content:
@@ -2322,6 +2482,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserQuotaListResponse"
+              examples:
+                searchResults:
+                  summary: User search results
+                  value:
+                    code: "LIST_FETCHED"
+                    message: "User search completed successfully"
+                    users: []
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total: 0
+                      pages: 0
         "400":
           description: Missing search query
           content:
@@ -2357,6 +2529,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserQuotaResponse"
+              examples:
+                userQuota:
+                  summary: User quota details
+                  value:
+                    code: "DATA_RETRIEVED"
+                    message: "User quota retrieved successfully"
+                    user_quota: {}
 
   /admin/users/{username}/quota/update/:
     put:
@@ -2399,6 +2578,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserQuotaResponse"
+              examples:
+                quotaUpdated:
+                  summary: User quota updated
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "User quota updated successfully"
+                    user_quota: {}
 
   # API Key Management Endpoints
   /admin/api-keys/:
@@ -2443,6 +2629,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminApiKeyListResponse"
+              examples:
+                apiKeysList:
+                  summary: API keys list
+                  value:
+                    code: "LIST_FETCHED"
+                    message: "API keys retrieved successfully"
+                    api_keys: []
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total: 0
+                      pages: 0
 
   /admin/api-keys/{key_id}/update/:
     put:
@@ -2485,6 +2683,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyDetailResponse"
+              examples:
+                apiKeyUpdated:
+                  summary: API key updated
+                  value:
+                    code: "RESOURCE_UPDATED"
+                    message: "API key updated successfully"
+                    api_key: {}
 
   /admin/api-keys/{key_id}/delete/:
     delete:
@@ -2515,6 +2720,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                apiKeyDeleted:
+                  summary: API key deleted
+                  value:
+                    code: "RESOURCE_DELETED"
+                    message: "API key deleted successfully"
 
   # Documentation Endpoints
   /docs/:
