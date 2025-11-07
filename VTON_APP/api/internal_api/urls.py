@@ -30,6 +30,10 @@ urlpatterns = [
     path("admin/users/", admin_views.list_all_users, name="admin-list-users"),  # List all users with filters
     path("admin/users/create/", admin_views.create_user, name="admin-create-user"),  # Create new user
     path("admin/users/statistics/", admin_views.get_user_statistics, name="admin-user-statistics"),  # Get user statistics
+    # Quota Management
+    path("admin/users/quotas/", admin_views.list_all_users_quotas, name="admin-list-user-quotas"),  # List all users with quotas
+    path("admin/users/search/", admin_views.search_users, name="admin-search-users"),  # Search for users
+    # User-specific endpoints 
     path("admin/users/id/<int:user_id>/", admin_views.get_user_by_id, name="admin-get-user-by-id"),  # Get user by ID
     path("admin/users/<str:username>/", admin_views.get_user_details, name="admin-get-user-details"),  # Get user by username (comprehensive)
     path("admin/users/<str:username>/update/", admin_views.update_user, name="admin-update-user"),  # Update user info
@@ -39,9 +43,6 @@ urlpatterns = [
     path("admin/users/<str:username>/premium/", admin_views.set_user_premium, name="admin-set-premium"),  # Set premium status
     path("admin/users/<str:username>/change-password/", admin_views.change_user_password, name="admin-change-password"),  # Change user password
     path("admin/users/<str:username>/api-keys/suspend/", admin_views.suspend_user_api_keys, name="admin-suspend-user-keys"),  # Suspend all user API keys
-    # Quota Management
-    path("admin/users/quotas/", admin_views.list_all_users_quotas, name="admin-list-user-quotas"),  # List all users with quotas
-    path("admin/users/search/", admin_views.search_users, name="admin-search-users"),  # Search for users
     path("admin/users/<str:username>/quota/", admin_views.get_user_quota, name="admin-get-user-quota"),  # Get specific user quota
     path("admin/users/<str:username>/quota/update/", admin_views.update_user_quota, name="admin-update-user-quota"),  # Update user quota
     # API Key Management

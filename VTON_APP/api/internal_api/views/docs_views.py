@@ -118,7 +118,7 @@ def api_docs_info(request):
         "endpoints": [
             {
                 "name": "Client API Specification",
-                "path": "/api/internal/docs/client-api-spec/",
+                "path": "/internal/api/docs/client-api-spec/",
                 "description": "OpenAPI specification for the external-facing VTON Client API",
                 "access": "public",
                 "format": "yaml",
@@ -126,7 +126,7 @@ def api_docs_info(request):
             },
             {
                 "name": "Internal API Specification",
-                "path": "/api/internal/docs/internal-api-spec/",
+                "path": "/internal/api/docs/internal-api-spec/",
                 "description": "OpenAPI specification for the Internal API (authentication, admin, user management)",
                 "access": "admin only",
                 "authentication": "JWT Bearer token required",

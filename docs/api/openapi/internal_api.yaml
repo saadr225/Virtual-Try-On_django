@@ -94,7 +94,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/register/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/register/" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -d '{
@@ -205,7 +205,7 @@ paths:
 
         **Login with username:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/login/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/login/" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -d '{
@@ -216,7 +216,7 @@ paths:
 
         **Login with email:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/login/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/login/" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -d '{
@@ -317,7 +317,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/admin-login/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/admin-login/" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -d '{
@@ -414,7 +414,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/logout/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/logout/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -507,7 +507,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/token/refresh/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/token/refresh/" \
           -H "accept: application/json" \
           -H "Content-Type: application/json" \
           -d '{
@@ -595,7 +595,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/auth/me/" \
+        curl -X GET "https://your-domain.com/internal/api/auth/me/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -660,7 +660,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PUT "https://your-domain.com/api/internal/auth/profile/" \
+        curl -X PUT "https://your-domain.com/internal/api/auth/profile/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -733,7 +733,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PATCH "https://your-domain.com/api/internal/auth/profile/" \
+        curl -X PATCH "https://your-domain.com/internal/api/auth/profile/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -792,7 +792,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/change-password/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/change-password/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -886,7 +886,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/auth/delete-account/" \
+        curl -X POST "https://your-domain.com/internal/api/auth/delete-account/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -984,7 +984,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/api-keys/?status=active&limit=20" \
+        curl -X GET "https://your-domain.com/internal/api/api-keys/?status=active&limit=20" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -1090,7 +1090,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/api-keys/create/" \
+        curl -X POST "https://your-domain.com/internal/api/api-keys/create/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -1198,7 +1198,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/" \
+        curl -X GET "https://your-domain.com/internal/api/api-keys/550e8400-e29b-41d4-a716-446655440000/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -1287,7 +1287,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PUT "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+        curl -X PUT "https://your-domain.com/internal/api/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -1396,7 +1396,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PATCH "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+        curl -X PATCH "https://your-domain.com/internal/api/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -1462,7 +1462,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X DELETE "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
+        curl -X DELETE "https://your-domain.com/internal/api/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -1540,7 +1540,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/api-keys/550e8400-e29b-41d4-a716-446655440000/regenerate/" \
+        curl -X POST "https://your-domain.com/internal/api/api-keys/550e8400-e29b-41d4-a716-446655440000/regenerate/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -1746,7 +1746,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/quota/me/" \
+        curl -X GET "https://your-domain.com/internal/api/quota/me/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -1804,7 +1804,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/?user_type=customer&is_active=true&page=1&limit=20" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/?user_type=customer&is_active=true&page=1&limit=20" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -1878,7 +1878,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/create/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/create/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -1926,7 +1926,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/statistics/" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/statistics/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -1955,7 +1955,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/id/42/" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/id/42/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -1993,7 +1993,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/john_doe/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2030,7 +2030,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PUT "https://your-domain.com/api/internal/admin/users/john_doe/update/" \
+        curl -X PUT "https://your-domain.com/internal/api/admin/users/john_doe/update/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2083,7 +2083,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/suspend/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/suspend/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2139,7 +2139,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/verify/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/verify/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2192,7 +2192,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/premium/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/premium/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2246,7 +2246,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/change-password/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/change-password/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2266,9 +2266,9 @@ paths:
             schema:
               type: object
               properties:
-        new_password:
-          type: string
-          minLength: 8
+                new_password:
+                  type: string
+                  minLength: 8
       responses:
         "200":
           description: Password changed successfully
@@ -2292,7 +2292,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X DELETE "https://your-domain.com/api/internal/admin/users/john_doe/delete/" \
+        curl -X DELETE "https://your-domain.com/internal/api/admin/users/john_doe/delete/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2340,7 +2340,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/api/internal/admin/users/john_doe/api-keys/suspend/" \
+        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/api-keys/suspend/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2392,7 +2392,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/quotas/?page=1&limit=20" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/quotas/?page=1&limit=20" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2449,7 +2449,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/search/?q=john&page=1&limit=10" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/search/?q=john&page=1&limit=10" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2511,7 +2511,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/users/john_doe/quota/" \
+        curl -X GET "https://your-domain.com/internal/api/admin/users/john_doe/quota/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2547,7 +2547,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PUT "https://your-domain.com/api/internal/admin/users/john_doe/quota/update/" \
+        curl -X PUT "https://your-domain.com/internal/api/admin/users/john_doe/quota/update/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2597,7 +2597,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/admin/api-keys/?status=active&page=1&limit=20" \
+        curl -X GET "https://your-domain.com/internal/api/admin/api-keys/?status=active&page=1&limit=20" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2652,7 +2652,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X PUT "https://your-domain.com/api/internal/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
+        curl -X PUT "https://your-domain.com/internal/api/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
@@ -2701,7 +2701,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X DELETE "https://your-domain.com/api/internal/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
+        curl -X DELETE "https://your-domain.com/internal/api/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
         ```
@@ -2738,7 +2738,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/docs/" \
+        curl -X GET "https://your-domain.com/internal/api/docs/" \
           -H "accept: application/json"
         ```
       operationId: getApiDocsInfo
@@ -2767,7 +2767,7 @@ paths:
                           example: Client API Specification
                         path:
                           type: string
-                          example: /api/internal/docs/client-api-spec/
+                          example: /internal/api/docs/client-api-spec/
                         description:
                           type: string
                           example: OpenAPI specification for the external-facing VTON Client API
@@ -2792,13 +2792,13 @@ paths:
                     message: API documentation endpoints
                     endpoints:
                       - name: Client API Specification
-                        path: /api/internal/docs/client-api-spec/
+                        path: /internal/api/docs/client-api-spec/
                         description: OpenAPI specification for the external-facing VTON Client API
                         access: public
                         format: yaml
                         content_type: application/x-yaml
                       - name: Internal API Specification
-                        path: /api/internal/docs/internal-api-spec/
+                        path: /internal/api/docs/internal-api-spec/
                         description: OpenAPI specification for the Internal API (authentication, admin, user management)
                         access: admin only
                         authentication: JWT Bearer token required
@@ -2826,7 +2826,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/docs/client-api-spec/" \
+        curl -X GET "https://your-domain.com/internal/api/docs/client-api-spec/" \
           -H "accept: application/x-yaml" \
           -o client_api.yaml
         ```
@@ -2898,7 +2898,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/api/internal/docs/internal-api-spec/" \
+        curl -X GET "https://your-domain.com/internal/api/docs/internal-api-spec/" \
           -H "accept: application/x-yaml" \
           -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
           -o internal_api.yaml
