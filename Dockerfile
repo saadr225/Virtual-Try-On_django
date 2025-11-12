@@ -26,6 +26,7 @@ RUN pip install --upgrade pip && \
 
 # Copy project files
 COPY VTON_APP/ ./VTON_APP/
+COPY docs/ ./docs/
 COPY .env.example .env.example
 
 # # Create media directories
