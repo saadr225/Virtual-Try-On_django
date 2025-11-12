@@ -50,6 +50,16 @@ class VTONRequest(models.Model):
     # Optional user tracking (for future authentication)
     # user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
 
+    # Add this field with unique related_name
+    api_key = models.ForeignKey(
+        "app.APIKey",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_api_vton_requests",  # Changed from 'vton_requests'
+        help_text="API key used for this request",
+    )
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

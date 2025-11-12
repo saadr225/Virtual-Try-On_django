@@ -3,7 +3,7 @@ Client-Side API Controller
 Handles all business logic for API key validation, rate limiting, and usage tracking.
 """
 
-from app.models import APIKey, APIUsageLog, DailyUsageStats
+from app.models import VTONRequest, APIKey, APIUsageLog, DailyUsageStats
 from app.Controllers.ResponseCodesController import get_response_code
 from django.utils import timezone
 from django.core.cache import cache
@@ -135,7 +135,7 @@ class ClientSideApiController:
     @staticmethod
     def check_monthly_quota(api_key):
         """
-        Check if API key has exceeded monthly quota.
+        Check if API key has exceeded its monthly quota.
 
         Args:
             api_key (APIKey): The API key object
@@ -143,16 +143,26 @@ class ClientSideApiController:
         Returns:
             tuple: (is_within_quota: bool, error_code: dict or None)
         """
-        now = timezone.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        try:
+            # Get current month start
+            now = timezone.now()
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        # Count requests this month for this specific API key
-        this_month_count = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=month_start).count()
+            # Count requests this month from both sources
+            usage_log_count = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=month_start).count()
 
-        if this_month_count >= api_key.monthly_quota:
-            return False, get_response_code("API_MONTHLY_QUOTA_EXCEEDED")
+            vton_request_count = VTONRequest.objects.filter(api_key=api_key, created_at__gte=month_start).count()
 
-        return True, None
+            requests_this_month = usage_log_count + vton_request_count
+
+            if requests_this_month >= api_key.monthly_quota:
+                return False, get_response_code("API_QUOTA_EXCEEDED")
+
+            return True, None
+
+        except Exception as e:
+            logger.error(f"Error checking monthly quota: {str(e)}")
+            return True, None  # Allow request on error
 
     @staticmethod
     def check_user_quota(api_key):
@@ -200,25 +210,38 @@ class ClientSideApiController:
             # Get client IP
             client_ip = ClientSideApiController.get_client_ip(request)
 
+            # Get request size from cached value or Content-Length header
+            request_size = getattr(request, "_cached_body_size", None)
+            if request_size is None:
+                request_size = int(request.META.get("CONTENT_LENGTH", 0))
+
+            # Determine if request was successful
+            is_successful = response.status_code < 400
+
             # Log to APIUsageLog
             APIUsageLog.objects.create(
                 api_key=api_key,
                 endpoint=request.path,
                 method=request.method,
-                status_code=response.status_code,
+                response_status_code=response.status_code,
                 ip_address=client_ip,
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
-                request_size=len(request.body) if hasattr(request, "body") else 0,
-                response_size=len(response.content) if hasattr(response, "content") else 0,
+                request_body_size=request_size,
+                response_body_size=len(response.content) if hasattr(response, "content") else 0,
+                is_successful=is_successful,
             )
 
             # Update or create DailyUsageStats
             today = timezone.now().date()
-            daily_stats, created = DailyUsageStats.objects.get_or_create(api_key=api_key, date=today, defaults={"request_count": 0, "error_count": 0})
+            daily_stats, created = DailyUsageStats.objects.get_or_create(
+                api_key=api_key, date=today, defaults={"total_requests": 0, "successful_requests": 0, "failed_requests": 0}
+            )
 
-            daily_stats.request_count += 1
-            if response.status_code >= 400:
-                daily_stats.error_count += 1
+            daily_stats.total_requests += 1
+            if is_successful:
+                daily_stats.successful_requests += 1
+            else:
+                daily_stats.failed_requests += 1
             daily_stats.save()
 
         except Exception as e:
@@ -319,14 +342,33 @@ class ClientSideApiController:
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Total requests
-        total_requests = APIUsageLog.objects.filter(api_key=api_key).count()
+        # Count both APIUsageLog and VTONRequest entries
+        # Total requests from usage logs
+        total_usage_logs = APIUsageLog.objects.filter(api_key=api_key).count()
 
-        # This month requests
-        requests_this_month = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=month_start).count()
+        # Total VTON requests (using main app model)
+        total_vton_requests = VTONRequest.objects.filter(api_key=api_key).count()
 
-        # Today requests
-        requests_today = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=day_start).count()
+        # Combined total
+        total_requests = total_usage_logs + total_vton_requests
+
+        # This month requests from usage logs
+        month_usage_logs = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=month_start).count()
+
+        # This month VTON requests
+        month_vton_requests = VTONRequest.objects.filter(api_key=api_key, created_at__gte=month_start).count()
+
+        # Combined month requests
+        requests_this_month = month_usage_logs + month_vton_requests
+
+        # Today requests from usage logs
+        today_usage_logs = APIUsageLog.objects.filter(api_key=api_key, timestamp__gte=day_start).count()
+
+        # Today VTON requests
+        today_vton_requests = VTONRequest.objects.filter(api_key=api_key, created_at__gte=day_start).count()
+
+        # Combined today requests
+        requests_today = today_usage_logs + today_vton_requests
 
         # Quota remaining
         quota_remaining = max(0, api_key.monthly_quota - requests_this_month)

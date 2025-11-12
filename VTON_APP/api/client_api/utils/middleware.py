@@ -45,7 +45,6 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         if not request.path.startswith("/api/v1/"):
             return None
 
-
         # Get API key from header
         api_key_str = request.META.get("HTTP_X_API_KEY")
 
@@ -78,6 +77,12 @@ class APIKeyValidationMiddleware(MiddlewareMixin):
         # Attach validated API key to request
         request.api_key = result
         request.api_key_valid = True
+
+        # Cache request body size before it's consumed by view processing
+        try:
+            request._cached_body_size = len(request.body)
+        except Exception:
+            request._cached_body_size = 0
 
         logger.debug(f"API key validated successfully for user {result.user.username}")
 

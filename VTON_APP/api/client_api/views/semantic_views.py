@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from api.client_api.serializers import VTONSerializer, VTONResponseSerializer
 from app.models.vton_models import VTONRequest
 from app.models.audit_models import AuditLog
-from app.models.analytics_models import APIUsageLog
 from app.Controllers.HelpersController import FileController
 from app.Controllers.VTONController import VTONController
 from app.Controllers.ResponseCodesController import get_response_code
@@ -271,24 +270,7 @@ def virtual_tryon(request):
         total_time = time.time() - start_time
         logger.info(f"Total request time: {total_time:.2f}s")
 
-        # Log API usage
-        try:
-            APIUsageLog.objects.create(
-                api_key=api_key,
-                vton_request=vton_request,
-                endpoint=request.path,
-                method=request.method,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                request_body_size=person_image_size + clothing_image_size,
-                response_status_code=status.HTTP_200_OK,
-                response_body_size=len(str(response_serializer.data)),
-                response_time_ms=int(total_time * 1000),
-                is_successful=True,
-            )
-        except Exception as e:
-            logger.error(f"Error logging API usage: {str(e)}")
-
+        # Note: API usage is logged by middleware automatically
         return create_response("VTON_REQUEST_COMPLETED", response_serializer.data, status.HTTP_200_OK)
 
     except Exception as e:
@@ -324,25 +306,7 @@ def virtual_tryon(request):
         except Exception as audit_error:
             logger.error(f"Error creating failure audit log: {str(audit_error)}")
 
-        # Log API usage for failed request
-        try:
-            total_time = time.time() - start_time
-            APIUsageLog.objects.create(
-                api_key=api_key,
-                vton_request=vton_request,
-                endpoint=request.path,
-                method=request.method,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                request_body_size=person_image_size + clothing_image_size,
-                response_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                response_time_ms=int(total_time * 1000),
-                is_successful=False,
-                error_message=str(e),
-                error_code="VTN009",
-            )
-        except Exception as log_error:
-            logger.error(f"Error logging failed API usage: {str(log_error)}")
+        # Note: API usage is logged by middleware automatically
 
         # Return error with partial data (uploaded images still accessible)
         response_serializer = VTONResponseSerializer(vton_request, context={"request": request})
@@ -403,72 +367,21 @@ def get_request_status(request, request_id):
 
         response_serializer = VTONResponseSerializer(vton_request, context={"request": request})
 
-        # Log API usage
-        try:
-            total_time = time.time() - request_start
-            APIUsageLog.objects.create(
-                api_key=api_key,
-                vton_request=vton_request,
-                endpoint=request.path,
-                method=request.method,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                response_status_code=status.HTTP_200_OK,
-                response_body_size=len(str(response_serializer.data)),
-                response_time_ms=int(total_time * 1000),
-                is_successful=True,
-            )
-        except Exception as e:
-            logger.error(f"Error logging API usage: {str(e)}")
-
+        # Note: API usage is logged by middleware automatically
         return create_response("VTON_STATUS_FETCHED", response_serializer.data, status.HTTP_200_OK)
 
     except Http404:
         # Handle the expected case where request_id doesn't exist
         logger.info(f"VTON request not found: {request_id}")
 
-        # Log failed API usage
-        try:
-            total_time = time.time() - request_start
-            APIUsageLog.objects.create(
-                api_key=api_key,
-                endpoint=request.path,
-                method=request.method,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                response_status_code=status.HTTP_404_NOT_FOUND,
-                response_time_ms=int(total_time * 1000),
-                is_successful=False,
-                error_message=f"VTONRequest with ID {request_id} not found",
-                error_code="VTN001",
-            )
-        except Exception as log_error:
-            logger.error(f"Error logging failed API usage: {str(log_error)}")
-
+        # Note: API usage is logged by middleware automatically
         return create_response("VTON_REQUEST_NOT_FOUND", {"detail": f"VTONRequest with ID {request_id} not found"}, status.HTTP_404_NOT_FOUND)
 
     except Exception as e:
         # Handle unexpected errors
         logger.error(f"Unexpected error retrieving request {request_id}: {str(e)}", exc_info=True)
 
-        # Log failed API usage
-        try:
-            total_time = time.time() - request_start
-            APIUsageLog.objects.create(
-                api_key=api_key,
-                endpoint=request.path,
-                method=request.method,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                response_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                response_time_ms=int(total_time * 1000),
-                is_successful=False,
-                error_message=str(e),
-                error_code="SYS001",
-            )
-        except Exception as log_error:
-            logger.error(f"Error logging failed API usage: {str(log_error)}")
-
+        # Note: API usage is logged by middleware automatically
         return create_response("SYSTEM_ERROR", {"detail": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -547,21 +460,5 @@ def list_recent_requests(request):
 
     response_serializer = VTONResponseSerializer(requests_list, many=True, context={"request": request})
 
-    # Log API usage
-    try:
-        total_time = time.time() - request_start
-        APIUsageLog.objects.create(
-            api_key=api_key,
-            endpoint=request.path,
-            method=request.method,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            response_status_code=status.HTTP_200_OK,
-            response_body_size=len(str(response_serializer.data)),
-            response_time_ms=int(total_time * 1000),
-            is_successful=True,
-        )
-    except Exception as e:
-        logger.error(f"Error logging API usage: {str(e)}")
-
+    # Note: API usage is logged by middleware automatically
     return create_response("VTON_REQUESTS_FETCHED", {"requests": response_serializer.data, "count": len(requests_list)}, status.HTTP_200_OK)
