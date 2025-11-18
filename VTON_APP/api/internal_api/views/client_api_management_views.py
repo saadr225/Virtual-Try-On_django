@@ -153,6 +153,8 @@ def list_api_keys(request):
         - SYS016: Invalid page size
     """
     try:
+        from app.Controllers.ClientSideApiController import ClientSideApiController
+
         user = request.user
         queryset = APIKey.objects.filter(user=user).order_by("-created_at")
 
@@ -178,9 +180,16 @@ def list_api_keys(request):
         api_keys = queryset[start:end]
         serializer = APIKeyListSerializer(api_keys, many=True)
 
+        # Enhance each API key with usage statistics
+        api_keys_data = serializer.data
+        for i, api_key in enumerate(api_keys):
+            stats = ClientSideApiController.get_usage_statistics(api_key)
+            api_keys_data[i]["total_requests"] = stats.get("total_requests", 0)
+            api_keys_data[i]["requests_this_month"] = stats.get("requests_this_month", 0)
+
         return create_response(
             "API_KEYS_FETCHED",
-            {"api_keys": serializer.data, "pagination": {"page": page, "limit": limit, "total": total_count, "pages": (total_count + limit - 1) // limit}},
+            {"api_keys": api_keys_data, "pagination": {"page": page, "limit": limit, "total": total_count, "pages": (total_count + limit - 1) // limit}},
             status.HTTP_200_OK,
         )
 

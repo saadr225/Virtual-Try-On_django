@@ -11,4 +11,4 @@ django.log
 
 tests/logs/
 errors.log
-pytest_cache/
+.pytest_cache/
