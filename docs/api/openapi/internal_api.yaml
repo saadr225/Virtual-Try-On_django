@@ -973,12 +973,16 @@ paths:
         **Features:**
         - Filter by status (active, inactive, suspended)
         - Paginated results
-        - Includes usage statistics
+        - Includes usage statistics (per-key)
         - Shows rate limits and quotas
+
+        **Per-key usage fields included in each api_key object:**
+        - `total_requests` (integer): Total requests made with this key (all time)
+        - `requests_this_month` (integer): Requests made with this key in the current calendar month
 
         **Response includes:**
         - API key details (masked for security)
-        - Current usage statistics
+        - Current usage statistics (see per-key usage fields above)
         - Rate limit configurations
         - Creation and last used timestamps
 
@@ -1023,7 +1027,7 @@ paths:
                 $ref: "#/components/schemas/ApiKeyListResponse"
               examples:
                 apiKeyList:
-                  summary: List of user's API keys
+                  summary: List of user's API keys (each entry includes usage stats)
                   value:
                     code: "API_KEYS_FETCHED"
                     message: "API keys retrieved successfully"
@@ -1054,7 +1058,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
   /api-keys/create/:
     post:
       tags:
