@@ -41,7 +41,9 @@ SUCCESS_CODES = {
     "SUCCESS": {"code": "SUC001", "message": "Request processed successfully."},
     "DATA_RETRIEVED": {"code": "SUC002", "message": "Data retrieved successfully."},
     "RESOURCE_CREATED": {"code": "SUC003", "message": "Resource created successfully."},
+    "DATA_CREATED": {"code": "SUC003", "message": "Resource created successfully."},  # Alias
     "RESOURCE_UPDATED": {"code": "SUC004", "message": "Resource updated successfully."},
+    "DATA_UPDATED": {"code": "SUC004", "message": "Resource updated successfully."},  # Alias
     "RESOURCE_DELETED": {"code": "SUC005", "message": "Resource deleted successfully."},
     "LOGIN_SUCCESS": {"code": "SUC006", "message": "Login successful."},
     "LOGOUT_SUCCESS": {"code": "SUC007", "message": "Logout successful."},
@@ -261,6 +263,18 @@ APIKEY_ERROR_CODES = {
     "API_CUMULATIVE_QUOTA_EXCEEDED": {"code": "API024", "message": "Cumulative user quota exceeded. Cannot create more API keys."},
 }
 
+# API Key Request Error Codes
+API_KEY_REQUEST_ERROR_CODES = {
+    "API_KEY_REQUEST_NOT_FOUND": {"code": "APIReq001", "message": "API key request not found."},
+    "API_KEY_REQUEST_CREATE_ERROR": {"code": "APIReq002", "message": "Error creating API key request."},
+    "API_KEY_REQUEST_UPDATE_ERROR": {"code": "APIReq003", "message": "Error updating API key request."},
+    "API_KEY_REQUEST_DELETE_ERROR": {"code": "APIReq004", "message": "Error deleting API key request."},
+    "API_KEY_REQUEST_CANNOT_CANCEL": {"code": "APIReq005", "message": "Request cannot be cancelled in current state."},
+    "API_KEY_REQUEST_ALREADY_EXISTS": {"code": "APIReq006", "message": "You already have a pending API key request."},
+    "API_KEY_REQUEST_INVALID_STATUS": {"code": "APIReq007", "message": "Invalid request status."},
+    "API_KEY_REQUEST_INSUFFICIENT_INFO": {"code": "APIReq008", "message": "Insufficient information provided in request."},
+}
+
 # Audit and Logging Error Codes
 AUDIT_ERROR_CODES = {
     "AUDIT_LOG_NOT_FOUND": {"code": "AUD001", "message": "Audit log not found."},
@@ -327,6 +341,7 @@ RESPONSE_CODES = {
     **SUBSCRIPTION_ERROR_CODES,
     **GENERAL_ERROR_CODES,
     **APIKEY_ERROR_CODES,
+    **API_KEY_REQUEST_ERROR_CODES,
     **AUDIT_ERROR_CODES,
     **ANALYTICS_ERROR_CODES,
     **API_SUCCESS_CODES,
