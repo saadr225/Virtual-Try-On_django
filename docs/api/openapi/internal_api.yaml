@@ -1423,7 +1423,6 @@ paths:
         - name: key_id
           in: path
           required: true
-          description: UUID of the API key to update
           schema:
             type: string
             format: uuid
@@ -1517,8 +1516,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /api-keys/{key_id}/regenerate/:
     post:
       tags:
         - API Keys
@@ -2257,7 +2254,7 @@ paths:
                   max_api_keys: 10
                   user_monthly_quota: 100000
                   payment_date: "2025-11-20"
-                  admin_notes: "Premium tier - annual subscription"
+                  admin_notes: "Premium tier - annual subscription paid"
                   approved_use_case: "High-volume e-commerce integration"
       responses:
         "200":
@@ -2336,6 +2333,7 @@ paths:
           schema:
             type: string
             format: uuid
+
       requestBody:
         required: true
         content:
@@ -2370,6 +2368,869 @@ paths:
                       rejection_reason: "Use case does not align with our service offerings"
         "400":
           description: Invalid request or already processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # Admin User Management Endpoints
+  /admin/users/:
+    get:
+      tags:
+        - Admin
+      summary: List All Users (Admin Only)
+      description: |
+        List all users in the system with filtering and search capabilities.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/admin/users/?user_type=customer&is_active=true" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: adminListAllUsers
+      parameters:
+        - name: user_type
+          in: query
+          description: Filter by user type
+          schema:
+            type: string
+            enum: [customer, store_owner, admin]
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: is_suspended
+          in: query
+          description: Filter by suspension status
+          schema:
+            type: boolean
+        - name: is_verified
+          in: query
+          description: Filter by verification status
+          schema:
+            type: boolean
+        - name: is_premium
+          in: query
+          description: Filter by premium status
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          description: Search in username, email, name
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserListResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/quotas/:
+    get:
+      tags:
+        - Admin
+      summary: List All Users with Quotas (Admin Only)
+      description: |
+        List all users and their API key quota information.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminListUsersQuotas
+      parameters:
+        - name: user_type
+          in: query
+          schema:
+            type: string
+            enum: [customer, store_owner, admin]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: User quotas retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaListResponse"
+
+  /admin/users/search/:
+    get:
+      tags:
+        - Admin
+      summary: Search Users (Admin Only)
+      description: |
+        Search for users by various criteria.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminSearchUsers
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserListResponse"
+
+  /admin/users/statistics/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Statistics (Admin Only)
+      description: |
+        Get overall user statistics and metrics.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/admin/users/statistics/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: adminGetUserStatistics
+      responses:
+        "200":
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStatisticsResponse"
+
+  /admin/users/id/{user_id}/:
+    get:
+      tags:
+        - Admin
+      summary: Get User by ID (Admin Only)
+      description: |
+        Get user details by user ID.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminGetUserById
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{username}/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Details by Username (Admin Only)
+      description: |
+        Get comprehensive user details including quota info and API keys.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/admin/users/johndoe/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: adminGetUserDetails
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDetailsResponse"
+
+  /admin/users/{username}/update/:
+    put:
+      tags:
+        - Admin
+      summary: Update User (Admin Only)
+      description: |
+        Update user information and settings.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminUpdateUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdateRequest"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+    patch:
+      tags:
+        - Admin
+      summary: Partially Update User (Admin Only)
+      operationId: adminPartialUpdateUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdateRequest"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+
+  /admin/users/{username}/delete/:
+    delete:
+      tags:
+        - Admin
+      summary: Delete/Deactivate User (Admin Only)
+      description: |
+        Soft delete (deactivate) a user account.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminDeleteUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/suspend/:
+    post:
+      tags:
+        - Admin
+      summary: Suspend/Unsuspend User (Admin Only)
+      description: |
+        Suspend or unsuspend a user account.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminSuspendUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserSuspendRequest"
+      responses:
+        "200":
+          description: User suspension status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/verify/:
+    post:
+      tags:
+        - Admin
+      summary: Verify/Unverify User (Admin Only)
+      description: |
+        Set user verification status.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminVerifyUser
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_verified
+              properties:
+                is_verified:
+                  type: boolean
+      responses:
+        "200":
+          description: Verification status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/premium/:
+    post:
+      tags:
+        - Admin
+      summary: Set Premium Status (Admin Only)
+      description: |
+        Grant or revoke premium status for a user.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminSetUserPremium
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserPremiumRequest"
+      responses:
+        "200":
+          description: Premium status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/change-password/:
+    post:
+      tags:
+        - Admin
+      summary: Change User Password (Admin Only)
+      description: |
+        Change a user's password (admin override).
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminChangeUserPassword
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_password
+              properties:
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/api-keys/suspend/:
+    post:
+      tags:
+        - Admin
+      summary: Suspend All User API Keys (Admin Only)
+      description: |
+        Suspend or activate all API keys for a user.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminSuspendUserApiKeys
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSuspendApiKeysRequest"
+      responses:
+        "200":
+          description: API keys updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/users/{username}/quota/:
+    get:
+      tags:
+        - Admin
+      summary: Get User Quota (Admin Only)
+      description: |
+        Get specific user's quota information.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminGetUserQuota
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User quota retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaResponse"
+
+  /admin/users/{username}/quota/update/:
+    put:
+      tags:
+        - Admin
+      summary: Update User Quota (Admin Only)
+      description: |
+        Update user's API key quota and limits.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Example cURL Request:**
+        ```bash
+        curl -X PUT "https://your-domain.com/internal/api/admin/users/johndoe/quota/update/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "max_api_keys": 5,
+            "api_key_generation_enabled": true,
+            "user_monthly_quota": 50000
+          }'
+        ```
+      operationId: adminUpdateUserQuota
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserQuotaRequest"
+      responses:
+        "200":
+          description: Quota updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaResponse"
+    patch:
+      tags:
+        - Admin
+      summary: Partially Update User Quota (Admin Only)
+      operationId: adminPartialUpdateUserQuota
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserQuotaRequest"
+      responses:
+        "200":
+          description: Quota updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserQuotaResponse"
+
+  /admin/api-keys/:
+    get:
+      tags:
+        - Admin
+      summary: List All API Keys (Admin Only)
+      description: |
+        List all API keys from all users.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminListAllApiKeys
+      parameters:
+        - name: user
+          in: query
+          description: Filter by username
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [active, inactive, suspended]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: API keys retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminApiKeyListResponse"
+
+  /admin/api-keys/{key_id}/update/:
+    put:
+      tags:
+        - Admin
+      summary: Update Any API Key (Admin Only)
+      description: |
+        Update any user's API key configuration.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminUpdateAnyApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateApiKeyRequest"
+      responses:
+        "200":
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+    patch:
+      tags:
+        - Admin
+      summary: Partially Update Any API Key (Admin Only)
+      operationId: adminPartialUpdateAnyApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateApiKeyRequest"
+      responses:
+        "200":
+          description: API key updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyDetailResponse"
+
+  /admin/api-keys/{key_id}/delete/:
+    delete:
+      tags:
+        - Admin
+      summary: Delete Any API Key (Admin Only)
+      description: |
+        Delete any user's API key.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminDeleteAnyApiKey
+      parameters:
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # Documentation Endpoints
+  /docs/:
+    get:
+      tags:
+        - Documentation
+      summary: Get API Documentation Info
+      description: |
+        Get information about available API documentation endpoints.
+
+        **Authentication:** Not required (public endpoint)
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/docs/" \
+          -H "accept: application/json"
+        ```
+      operationId: getApiDocsInfo
+      security: []
+      responses:
+        "200":
+          description: Documentation info retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: SUCCESS
+                  message:
+                    type: string
+                    example: API documentation endpoints
+                  endpoints:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        path:
+                          type: string
+                        description:
+                          type: string
+                        access:
+                          type: string
+                        format:
+                          type: string
+                        content_type:
+                          type: string
+              examples:
+                docsInfo:
+                  summary: Available documentation endpoints
+                  value:
+                    code: "SUCCESS"
+                    message: "API documentation endpoints"
+                    endpoints:
+                      - name: "Client API Specification"
+                        path: "/internal/api/docs/client-api-spec/"
+                        description: "OpenAPI specification for the external-facing VTON Client API"
+                        access: "public"
+                        format: "yaml"
+                        content_type: "application/x-yaml"
+                      - name: "Internal API Specification"
+                        path: "/internal/api/docs/internal-api-spec/"
+                        description: "OpenAPI specification for the Internal API"
+                        access: "admin only"
+                        authentication: "JWT Bearer token required"
+                        format: "yaml"
+                        content_type: "application/x-yaml"
+
+  /docs/client-api-spec/:
+    get:
+      tags:
+        - Documentation
+      summary: Get Client API OpenAPI Specification
+      description: |
+        Retrieve the OpenAPI specification file for the Client API.
+
+        **Authentication:** Not required (public endpoint)
+
+        **Returns:** YAML file containing the complete OpenAPI specification
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/docs/client-api-spec/" \
+          -H "accept: application/x-yaml" \
+          -o client_api.yaml
+        ```
+      operationId: getClientApiSpec
+      security: []
+      responses:
+        "200":
+          description: OpenAPI specification file
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Specification file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /docs/internal-api-spec/:
+    get:
+      tags:
+        - Documentation
+      summary: Get Internal API OpenAPI Specification (Admin Only)
+      description: |
+        Retrieve the OpenAPI specification file for the Internal API.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Returns:** YAML file containing the complete OpenAPI specification
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/docs/internal-api-spec/" \
+          -H "accept: application/x-yaml" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
+          -o internal_api.yaml
+        ```
+      operationId: getInternalApiSpec
+      responses:
+        "200":
+          description: OpenAPI specification file
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions (not admin)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: "ACCESS_DENIED"
+                message: "Access denied"
+                detail: "Admin privileges required to access internal API specification"
+        "404":
+          description: Specification file not found
           content:
             application/json:
               schema:
@@ -3450,7 +4311,7 @@ components:
         admin_notes:
           type: string
           description: Internal notes about the rejection (optional)
-          example: "User requested features not available"
+          example: "User requested features not available in current API version"
 
   # Common Schemas
   SuccessResponse:
