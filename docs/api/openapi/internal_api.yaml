@@ -65,6 +65,10 @@ tags:
     description: User profile information and management
   - name: API Keys
     description: API key creation, management, and statistics
+  - name: API Key Requests
+    description: Submit and manage API key access requests (Client)
+  - name: Admin - API Key Requests
+    description: Review and approve/reject API key requests (Staff/Admin)
   - name: Admin
     description: Administrative operations (admin users only)
   - name: Documentation
@@ -1066,30 +1070,38 @@ paths:
       description: |
         Create a new API key for the authenticated user.
 
+        **IMPORTANT: User must first be approved by admin/staff**
+        - Users must submit an API key request via `/api-key-requests/submit/`
+        - Staff/admin must approve the request
+        - Only then can users create API keys within their approved quota
+
         **Authentication:** Required (JWT access token)
 
         **Request Headers:**
         - `Authorization: Bearer <access_token>`
 
-        **Permission Restrictions:**
-        - **Non-admin users** can only specify:
-          - `name` (required)
-          - `expires_in_days` (optional)
-        - **Admin users** can additionally set:
-          - Rate limits (`rate_limit_per_minute`, etc.)
-          - Monthly quota (`monthly_quota`)
-          - Domain restrictions (`allowed_domains`)
-          - IP restrictions (`allowed_ips`)
+        **Permission Requirements:**
+        - User's `api_key_generation_enabled` must be `true` (set by admin approval)
+        - User must not have reached `max_api_keys` limit
+        - User must have remaining monthly quota
 
-        **Default Values (for non-admin users):**
-        - Rate limits and quotas use account defaults
-        - No domain/IP restrictions (all allowed)
-        - Never expires (unless `expires_in_days` specified)
+        **Validation:**
+        If user is not approved, returns 403 with helpful message:
+        ```json
+        {
+          "code": "UNAUTHORIZED",
+          "message": "User not approved for API key generation",
+          "error": "API key generation is disabled for your account",
+          "message": "Please submit an API key request if you haven't already",
+          "help": "Use the /internal/api/api-key-requests/submit/ endpoint to request API key access"
+        }
+        ```
 
-        **Security Note:** 
-        - API key is shown only once on creation
-        - Store it securely - it cannot be retrieved later
-        - Use descriptive names for key identification
+        **Process (for approved users):**
+        1. Validates user approval status and quota limits
+        2. Creates API key with user's default rate limits
+        3. Returns full API key (shown only once)
+        4. Logs creation event
 
         **Example cURL Request:**
         ```bash
@@ -1098,8 +1110,7 @@ paths:
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
           -d '{
-            "name": "My Production API Key",
-            "expires_in_days": 365
+            "name": "My Production API Key"
           }'
         ```
       operationId: createApiKey
@@ -1474,7 +1485,6 @@ paths:
         - name: key_id
           in: path
           required: true
-          description: UUID of the API key to delete
           schema:
             type: string
             format: uuid
@@ -1556,7 +1566,6 @@ paths:
         - name: key_id
           in: path
           required: true
-          description: UUID of the API key to regenerate
           schema:
             type: string
             format: uuid
@@ -1738,10 +1747,18 @@ paths:
         - Current cumulative usage across all API keys
         - Remaining quota
         - API key generation limits
+        - **Approval status** - whether user can create API keys
         - Default rate limits for new keys
         - Summary of all user's API keys
 
+        **can_create_more field:**
+        Returns tuple `[boolean, error_message]`:
+        - `[true, ""]` - User can create more keys
+        - `[false, "API key generation is disabled"]` - User not approved
+        - `[false, "Maximum API keys limit reached"]` - Hit max_api_keys limit
+
         **Use Cases:**
+        - Check if user needs to submit API key request
         - Check overall account limits
         - Plan API key creation
         - Monitor account usage
@@ -1762,1212 +1779,601 @@ paths:
               schema:
                 $ref: "#/components/schemas/QuotaInfoResponse"
               examples:
-                userQuota:
-                  summary: Complete user quota information
+                approvedUser:
+                  summary: Approved user quota
                   value:
                     code: "DATA_RETRIEVED"
                     message: "User quota information retrieved successfully"
                     quota_info:
                       max_api_keys: 5
                       current_api_keys: 2
-                      can_create_more: true
+                      can_create_more: [true, ""]
                       api_key_generation_enabled: true
-                      user_monthly_quota: 1000
-                      cumulative_quota_used: 450
-                      quota_remaining: 550
+                      user_monthly_quota: 50000
+                      cumulative_quota_used: 12500
+                      quota_remaining: 37500
                       default_rate_limits:
                         per_minute: 100
                         per_hour: 1000
                         per_day: 10000
-                        monthly_quota: 500
+                        monthly_quota: 25000
                       api_keys_summary:
                         - key_id: "550e8400-e29b-41d4-a716-446655440000"
                           name: "Production Key"
                           status: "active"
-                          requests_this_month: 300
-                        - key_id: "661f9510-f30c-52e5-b827-557766551111"
-                          name: "Development Key"
-                          status: "active"
-                          requests_this_month: 150
-        "401":
-          description: Authentication required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  # Admin Endpoints
-  /admin/users/:
-    get:
-      tags:
-        - Admin
-      summary: List All Users
-      description: |
-        List all users in the system with filtering and pagination (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/?user_type=customer&is_active=true&page=1&limit=20" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: listAllUsers
-      parameters:
-        - name: user_type
-          in: query
-          description: Filter by user type
-          schema:
-            type: string
-            enum: [customer, store_owner, admin]
-        - name: is_active
-          in: query
-          description: Filter by active status
-          schema:
-            type: boolean
-        - name: is_suspended
-          in: query
-          description: Filter by suspension status
-          schema:
-            type: boolean
-        - name: is_verified
-          in: query
-          description: Filter by verification status
-          schema:
-            type: boolean
-        - name: is_premium
-          in: query
-          description: Filter by premium status
-          schema:
-            type: boolean
-        - name: search
-          in: query
-          description: Search username, email, first/last name
-          schema:
-            type: string
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-            maximum: 100
-      responses:
-        "200":
-          description: Users retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminUserListResponse"
-              examples:
-                userList:
-                  summary: List of users
+                          requests_this_month: 8000
+                          monthly_quota: 25000
+                          quota_remaining: 17000
+                          last_used_at: "2025-11-20T09:30:00Z"
+                notApprovedUser:
+                  summary: Not approved user quota
                   value:
-                    code: "LIST_FETCHED"
-                    message: "List fetched successfully"
-        "403":
-          description: Access denied (not admin)
+                    code: "DATA_RETRIEVED"
+                    message: "User quota information retrieved successfully"
+                    quota_info:
+                      max_api_keys: 0
+                      current_api_keys: 0
+                      can_create_more: [false, "API key generation is disabled for your account"]
+                      api_key_generation_enabled: false
+                      user_monthly_quota: 0
+                      cumulative_quota_used: 0
+                      quota_remaining: 0
+                      default_rate_limits:
+                        per_minute: 0
+                        per_hour: 0
+                        per_day: 0
+                        monthly_quota: 0
+                      api_keys_summary: []
 
-  /admin/users/create/:
+  # API Key Request Endpoints (Client) - INSERT HERE
+  /api-key-requests/submit/:
     post:
       tags:
-        - Admin
-      summary: Create New User
+        - API Key Requests
+      summary: Submit API Key Request
       description: |
-        Create a new user account (Admin only)
+        Submit a request for API key generation access.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Process:**
+        1. User submits business information and use case
+        2. Request created with status "pending"
+        3. Staff/admin will review the request
+        4. User receives notification when request is processed
+
+        **Important Notes:**
+        - Only one pending request allowed at a time
+        - Users cannot create API keys until request is approved
+        - After approval, users can create keys within approved limits
 
         **Example cURL Request:**
         ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/create/" \
+        curl -X POST "https://your-domain.com/internal/api/api-key-requests/submit/" \
           -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
           -d '{
-            "username": "newuser",
-            "email": "newuser@example.com",
-            "password": "SecurePassword123",
-            "first_name": "John",
-            "last_name": "Doe",
-            "user_type": "customer",
-            "is_verified": false,
-            "phone_number": "+1234567890"
+            "business_name": "Fashion Store Ltd",
+            "business_email": "api@fashionstore.com",
+            "use_case": "Virtual try-on integration for e-commerce",
+            "expected_usage": "Approximately 10,000 requests per month",
+            "website": "https://fashionstore.com"
           }'
         ```
-      operationId: createUser
+      operationId: submitApiKeyRequest
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdminUserCreateRequest"
+              $ref: "#/components/schemas/ApiKeyRequestSubmitRequest"
+            examples:
+              basicRequest:
+                summary: Basic API key request
+                value:
+                  business_name: "Fashion Store Ltd"
+                  business_email: "api@fashionstore.com"
+                  use_case: "Virtual try-on integration for our e-commerce platform"
+                  expected_usage: "Approximately 10,000 requests per month"
+                  website: "https://fashionstore.com"
+                  additional_info: "We plan to integrate on all product pages"
       responses:
         "201":
-          description: User created successfully
+          description: API key request submitted successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AdminUserDetailResponse"
+                $ref: "#/components/schemas/ApiKeyRequestResponse"
               examples:
-                userCreated:
-                  summary: User created successfully
+                requestSubmitted:
+                  summary: Request created
                   value:
-                    code: "RESOURCE_CREATED"
-                    message: "Resource created successfully"
+                    code: "API_KEY_REQUEST_CREATED"
+                    message: "API key request submitted successfully"
+                    request:
+                      request_id: "550e8400-e29b-41d4-a716-446655440000"
+                      user: "johndoe"
+                      business_name: "Fashion Store Ltd"
+                      business_email: "api@fashionstore.com"
+                      use_case: "Virtual try-on integration for e-commerce"
+                      expected_usage: "Approximately 10,000 requests per month"
+                      website: "https://fashionstore.com"
+                      additional_info: "We plan to integrate on all product pages"
+                      status: "pending"
+                      created_at: "2025-11-20T10:00:00Z"
+                      updated_at: "2025-11-20T10:00:00Z"
+                      approved_by: null
+                      approved_at: null
+                      rejected_by: null
+                      rejected_at: null
         "400":
-          description: Validation error
-
-  /admin/users/statistics/:
-    get:
-      tags:
-        - Admin
-      summary: Get User Statistics
-      description: |
-        Get overall user statistics and breakdown (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/statistics/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: getUserStatistics
-      responses:
-        "200":
-          description: Statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserStatisticsResponse"
-              examples:
-                userStats:
-                  summary: User statistics
-                  value:
-                    code: "DATA_RETRIEVED"
-                    message: "Data retrieved successfully"
-
-  /admin/users/id/{user_id}/:
-    get:
-      tags:
-        - Admin
-      summary: Get User by ID
-      description: |
-        Get user information by user ID (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/id/42/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: getUserById
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          description: User ID
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: User retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminUserDetailResponse"
-              examples:
-                userDetail:
-                  summary: User details
-                  value:
-                    code: "DATA_RETRIEVED"
-                    message: "Data retrieved successfully"
-        "404":
-          description: User not found
-
-  /admin/users/{username}/:
-    get:
-      tags:
-        - Admin
-      summary: Get User Details
-      description: |
-        Get comprehensive details about a specific user (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/john_doe/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: getUserDetails
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: User details retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminUserDetailResponse"
-              examples:
-                userDetails:
-                  summary: User details
-                  value:
-                    code: "DATA_RETRIEVED"
-                    message: "Data retrieved successfully"
-        "404":
-          description: User not found
-
-  /admin/users/{username}/update/:
-    put:
-      tags:
-        - Admin
-      summary: Update User Information
-      description: |
-        Update user information including profile data and settings (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X PUT "https://your-domain.com/internal/api/admin/users/john_doe/update/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "email": "newemail@example.com",
-            "first_name": "Jane",
-            "user_type": "store_owner",
-            "is_verified": true,
-            "phone_number": "+1234567890",
-            "city": "New York",
-            "country": "USA"
-          }'
-        ```
-      operationId: updateUser
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminUserUpdateRequest"
-      responses:
-        "200":
-          description: User updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminUserDetailResponse"
-              examples:
-                userUpdated:
-                  summary: User updated successfully
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "Resource updated successfully"
-        "404":
-          description: User not found
-
-  /admin/users/{username}/suspend/:
-    post:
-      tags:
-        - Admin
-      summary: Suspend/Unsuspend User
-      description: |
-        Suspend or unsuspend a user account (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/suspend/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "is_suspended": true,
-            "suspension_reason": "Violation of terms of service"
-          }'
-        ```
-      operationId: suspendUser
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminUserSuspendRequest"
-      responses:
-        "200":
-          description: Suspension status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                userSuspended:
-                  summary: User suspended
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User suspended successfully"
-                    is_suspended: true
-                    suspension_reason: "Violation of terms of service"
-                userUnsuspended:
-                  summary: User unsuspended
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User unsuspended successfully"
-                    is_suspended: false
-        "400":
-          description: Validation error
-
-  /admin/users/{username}/verify/:
-    post:
-      tags:
-        - Admin
-      summary: Verify/Unverify User
-      description: |
-        Verify or unverify a user account (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/verify/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{"is_verified": true}'
-        ```
-      operationId: verifyUser
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                is_verified:
-                  type: boolean
-      responses:
-        "200":
-          description: Verification status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                userVerified:
-                  summary: User verified
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User verified successfully"
-                    is_verified: true
-                userUnverified:
-                  summary: User unverified
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User unverified successfully"
-                    is_verified: false
-
-  /admin/users/{username}/premium/:
-    post:
-      tags:
-        - Admin
-      summary: Set User Premium Status
-      description: |
-        Grant or remove premium status for a user (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/premium/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "is_premium": true,
-            "premium_expiry": "2025-12-31T23:59:59Z"
-          }'
-        ```
-      operationId: setUserPremium
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminUserPremiumRequest"
-      responses:
-        "200":
-          description: Premium status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                premiumGranted:
-                  summary: Premium status granted
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "Premium status granted successfully"
-                    is_premium: true
-                    premium_expiry: "2025-12-31T23:59:59Z"
-                premiumRevoked:
-                  summary: Premium status revoked
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "Premium status revoked successfully"
-                    is_premium: false
-
-  /admin/users/{username}/change-password/:
-    post:
-      tags:
-        - Admin
-      summary: Change User Password
-      description: |
-        Change a user's password (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/change-password/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{"new_password": "NewSecurePassword123"}'
-        ```
-      operationId: changeUserPassword
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                new_password:
-                  type: string
-                  minLength: 8
-      responses:
-        "200":
-          description: Password changed successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                passwordChanged:
-                  summary: Password changed
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "Password changed successfully"
-  /admin/users/{username}/delete/:
-    delete:
-      tags:
-        - Admin
-      summary: Delete/Deactivate User
-      description: |
-        Delete or deactivate a user account (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X DELETE "https://your-domain.com/internal/api/admin/users/john_doe/delete/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: deleteUser
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: hard_delete
-          in: query
-          description: Permanent deletion (superuser only)
-          schema:
-            type: boolean
-            default: false
-      responses:
-        "200":
-          description: User deleted/deactivated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                userDeactivated:
-                  summary: User deactivated
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User deactivated successfully"
-                userDeleted:
-                  summary: User permanently deleted
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User permanently deleted successfully"
-        "403":
-          description: Access denied
-
-  /admin/users/{username}/api-keys/suspend/:
-    post:
-      tags:
-        - Admin
-      summary: Suspend All User API Keys
-      description: |
-        Suspend or activate all API keys for a user (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X POST "https://your-domain.com/internal/api/admin/users/john_doe/api-keys/suspend/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "action": "suspend",
-            "reason": "Account under review"
-          }'
-        ```
-      operationId: suspendUserApiKeys
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminSuspendApiKeysRequest"
-      responses:
-        "200":
-          description: API keys status updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                apiKeysSuspended:
-                  summary: API keys suspended
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "All user API keys suspended successfully"
-                apiKeysActivated:
-                  summary: API keys activated
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "All user API keys activated successfully"
-
-  # User Quota Management Endpoints
-  /admin/users/quotas/:
-    get:
-      tags:
-        - Admin
-      summary: List All Users with Quotas
-      description: |
-        List all users and their API key quotas (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/quotas/?page=1&limit=20" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: listAllUsersQuotas
-      parameters:
-        - name: user_type
-          in: query
-          schema:
-            type: string
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-            maximum: 100
-      responses:
-        "200":
-          description: Users retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserQuotaListResponse"
-              examples:
-                usersQuotasList:
-                  summary: Users quotas list
-                  value:
-                    code: "LIST_FETCHED"
-                    message: "Users quotas retrieved successfully"
-                    users: []
-                    pagination:
-                      page: 1
-                      limit: 20
-                      total: 0
-                      pages: 0
-        "403":
-          description: Access denied (not admin)
+          description: Validation error or duplicate pending request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /admin/users/search/:
-    get:
-      tags:
-        - Admin
-      summary: Search Users
-      description: |
-        Search for users by username, email, or name (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/search/?q=john&page=1&limit=10" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: searchUsers
-      parameters:
-        - name: q
-          in: query
-          required: true
-          description: Search query
-          schema:
-            type: string
-        - name: user_type
-          in: query
-          schema:
-            type: string
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-      responses:
-        "200":
-          description: Search results retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserQuotaListResponse"
               examples:
-                searchResults:
-                  summary: User search results
+                duplicateRequest:
+                  summary: Already have pending request
                   value:
-                    code: "LIST_FETCHED"
-                    message: "User search completed successfully"
-                    users: []
-                    pagination:
-                      page: 1
-                      limit: 20
-                      total: 0
-                      pages: 0
-        "400":
-          description: Missing search query
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /admin/users/{username}/quota/:
-    get:
-      tags:
-        - Admin
-      summary: Get User Quota
-      description: |
-        Get specific user's API key quota settings (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/users/john_doe/quota/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: getUserQuota
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Quota retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserQuotaResponse"
-              examples:
-                userQuota:
-                  summary: User quota details
-                  value:
-                    code: "DATA_RETRIEVED"
-                    message: "User quota retrieved successfully"
-                    user_quota: {}
-
-  /admin/users/{username}/quota/update/:
-    put:
-      tags:
-        - Admin
-      summary: Update User Quota
-      description: |
-        Update user's API key quota settings (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X PUT "https://your-domain.com/internal/api/admin/users/john_doe/quota/update/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "max_api_keys": 10,
-            "user_monthly_quota": 50000,
-            "default_rate_limit_per_minute": 200,
-            "default_rate_limit_per_hour": 2000
-          }'
-        ```
-      operationId: updateUserQuota
-      parameters:
-        - name: username
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateUserQuotaRequest"
-      responses:
-        "200":
-          description: Quota updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserQuotaResponse"
-              examples:
-                quotaUpdated:
-                  summary: User quota updated
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "User quota updated successfully"
-                    user_quota: {}
-
-  # API Key Management Endpoints
-  /admin/api-keys/:
-    get:
-      tags:
-        - Admin
-      summary: List All API Keys
-      description: |
-        List all API keys across all users (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/admin/api-keys/?status=active&page=1&limit=20" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: listAllApiKeys
-      parameters:
-        - name: username
-          in: query
-          schema:
-            type: string
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [active, inactive, suspended]
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-      responses:
-        "200":
-          description: API keys retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminApiKeyListResponse"
-              examples:
-                apiKeysList:
-                  summary: API keys list
-                  value:
-                    code: "LIST_FETCHED"
-                    message: "API keys retrieved successfully"
-                    api_keys: []
-                    pagination:
-                      page: 1
-                      limit: 20
-                      total: 0
-                      pages: 0
-
-  /admin/api-keys/{key_id}/update/:
-    put:
-      tags:
-        - Admin
-      summary: Admin Update API Key
-      description: |
-        Update any API key with full control (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X PUT "https://your-domain.com/internal/api/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/update/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "status": "suspended",
-            "rate_limit_per_minute": 150,
-            "rate_limit_per_hour": 2000
-          }'
-        ```
-      operationId: adminUpdateApiKey
-      parameters:
-        - name: key_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminUpdateApiKeyRequest"
-      responses:
-        "200":
-          description: API key updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiKeyDetailResponse"
-              examples:
-                apiKeyUpdated:
-                  summary: API key updated
-                  value:
-                    code: "RESOURCE_UPDATED"
-                    message: "API key updated successfully"
-                    api_key: {}
-
-  /admin/api-keys/{key_id}/delete/:
-    delete:
-      tags:
-        - Admin
-      summary: Admin Delete API Key
-      description: |
-        Delete any API key (Admin only)
-
-        **Example cURL Request:**
-        ```bash
-        curl -X DELETE "https://your-domain.com/internal/api/admin/api-keys/550e8400-e29b-41d4-a716-446655440000/delete/" \
-          -H "accept: application/json" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE"
-        ```
-      operationId: adminDeleteApiKey
-      parameters:
-        - name: key_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: API key deleted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              examples:
-                apiKeyDeleted:
-                  summary: API key deleted
-                  value:
-                    code: "RESOURCE_DELETED"
-                    message: "API key deleted successfully"
-
-  # Documentation Endpoints
-  /docs/:
-    get:
-      tags:
-        - Documentation
-      summary: API Documentation Info
-      description: |
-        Get information about available API documentation endpoints
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/docs/" \
-          -H "accept: application/json"
-        ```
-      operationId: getApiDocsInfo
-      security: []
-      responses:
-        "200":
-          description: Documentation info retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: string
-                    example: SUCCESS
-                  message:
-                    type: string
-                    example: API documentation endpoints
-                  endpoints:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                          example: Client API Specification
-                        path:
-                          type: string
-                          example: /internal/api/docs/client-api-spec/
-                        description:
-                          type: string
-                          example: OpenAPI specification for the external-facing VTON Client API
-                        access:
-                          type: string
-                          enum: [public, admin only]
-                          example: public
-                        authentication:
-                          type: string
-                          example: JWT Bearer token required
-                        format:
-                          type: string
-                          example: yaml
-                        content_type:
-                          type: string
-                          example: application/x-yaml
-              examples:
-                docsInfo:
-                  summary: Available documentation endpoints
-                  value:
-                    code: SUCCESS
-                    message: API documentation endpoints
-                    endpoints:
-                      - name: Client API Specification
-                        path: /internal/api/docs/client-api-spec/
-                        description: OpenAPI specification for the external-facing VTON Client API
-                        access: public
-                        format: yaml
-                        content_type: application/x-yaml
-                      - name: Internal API Specification
-                        path: /internal/api/docs/internal-api-spec/
-                        description: OpenAPI specification for the Internal API (authentication, admin, user management)
-                        access: admin only
-                        authentication: JWT Bearer token required
-                        format: yaml
-                        content_type: application/x-yaml
-
-  /docs/client-api-spec/:
-    get:
-      tags:
-        - Documentation
-      summary: Get Client API Specification
-      description: |
-        Retrieve the OpenAPI specification YAML file for the Client API (VTON service).
-
-        **Access:** Public - No authentication required
-
-        **Format:** YAML only (application/x-yaml)
-
-        **Usage:**
-        - Download directly or display in browser
-        - Import into Swagger UI, Redoc, or other OpenAPI tools
-        - Use for API client generation
-
-        The file is served directly without parsing, ensuring fast response times.
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/docs/client-api-spec/" \
-          -H "accept: application/x-yaml" \
-          -o client_api.yaml
-        ```
-      operationId: getClientApiSpec
-      security: []
-      responses:
-        "200":
-          description: OpenAPI specification YAML file retrieved successfully
-          content:
-            application/x-yaml:
-              schema:
-                type: string
-                format: binary
-                description: Complete OpenAPI 3.0 specification in YAML format
-          headers:
-            Content-Type:
-              description: YAML content type
-              schema:
-                type: string
-                example: application/x-yaml
-            Content-Disposition:
-              description: Inline display (not download)
-              schema:
-                type: string
-                example: inline; filename="client_api.yaml"
-        "404":
-          description: Specification file not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: ERR000
-                message: Unknown error code.
-                detail: Client API specification file not found
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: SYS001
-                message: Internal server error
-                detail: An unexpected error occurred
-
-  /docs/internal-api-spec/:
-    get:
-      tags:
-        - Documentation
-      summary: Get Internal API Specification
-      description: |
-        Retrieve the OpenAPI specification YAML file for the Internal API.
-
-        **Access:** Admin users only - Requires JWT authentication
-
-        **Format:** YAML only (application/x-yaml)
-
-        **Permissions Required:**
-        - Valid JWT access token
-        - Admin privileges (is_staff, is_superuser, or user_type='admin')
-
-        **Usage:**
-        - Download directly or display in browser
-        - Import into Swagger UI, Redoc, or other OpenAPI tools
-        - Use for internal API documentation
-
-        The file is served directly without parsing, ensuring fast response times.
-
-        **Example cURL Request:**
-        ```bash
-        curl -X GET "https://your-domain.com/internal/api/docs/internal-api-spec/" \
-          -H "accept: application/x-yaml" \
-          -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN_HERE" \
-          -o internal_api.yaml
-        ```
-      operationId: getInternalApiSpec
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: OpenAPI specification YAML file retrieved successfully
-          content:
-            application/x-yaml:
-              schema:
-                type: string
-                format: binary
-                description: Complete OpenAPI 3.0 specification in YAML format
-          headers:
-            Content-Type:
-              description: YAML content type
-              schema:
-                type: string
-                example: application/x-yaml
-            Content-Disposition:
-              description: Inline display (not download)
-              schema:
-                type: string
-                example: inline; filename="internal_api.yaml"
+                    code: "API_KEY_REQUEST_EXISTS"
+                    message: "You already have a pending API key request"
         "401":
           description: Authentication required
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: AUT001
-                message: Authentication credentials were not provided
+
+  /api-key-requests/my-requests/:
+    get:
+      tags:
+        - API Key Requests
+      summary: List My API Key Requests
+      description: |
+        List all API key requests submitted by the authenticated user.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Features:**
+        - View all requests (pending, approved, rejected)
+        - Filter by status
+        - Paginated results
+        - See approval/rejection details
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/api-key-requests/my-requests/?status=pending" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
+      operationId: listMyApiKeyRequests
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+            example: pending
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Results per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyRequestListResponse"
+              examples:
+                myRequests:
+                  summary: User's requests
+                  value:
+                    code: "API_KEY_REQUESTS_FETCHED"
+                    message: "API key requests retrieved successfully"
+                    requests:
+                      - request_id: "550e8400-e29b-41d4-a716-446655440000"
+                        user: "johndoe"
+                        business_name: "Fashion Store Ltd"
+                        status: "approved"
+                        created_at: "2025-11-15T10:00:00Z"
+                        approved_by: "admin_user"
+                        approved_at: "2025-11-16T14:30:00Z"
+                        max_api_keys: 5
+                        user_monthly_quota: 50000
+                    pagination:
+                      page: 1
+                      limit: 10
+                      total: 1
+                      pages: 1
+
+  /api-key-requests/{request_id}/:
+    get:
+      tags:
+        - API Key Requests
+      summary: Get API Key Request Details
+      description: |
+        Get detailed information about a specific API key request.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only view their own requests.
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/api-key-requests/550e8400-e29b-41d4-a716-446655440000/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        ```
+      operationId: getApiKeyRequestDetail
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          description: UUID of the API key request
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Request details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyRequestDetailResponse"
         "403":
-          description: Admin access required
+          description: Access denied - not your request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: ACCESS_DENIED
-                message: Access denied
-                detail: Admin privileges required to access this endpoint
         "404":
-          description: Specification file not found
+          description: Request not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: ERR000
-                message: Unknown error code.
-                detail: Internal API specification file not found
-        "500":
-          description: Internal server error
+
+  # Admin/Staff API Key Request Management
+  /admin/api-key-requests/:
+    get:
+      tags:
+        - Admin - API Key Requests
+      summary: List All API Key Requests (Staff/Admin)
+      description: |
+        List all API key requests from all users (Staff/Admin only).
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Features:**
+        - View all requests from all users
+        - Filter by status (pending, approved, rejected)
+        - Filter by user
+        - Search by business name/email
+        - Paginated results
+
+        **Example cURL Request:**
+        ```bash
+        curl -X GET "https://your-domain.com/internal/api/admin/api-key-requests/?status=pending" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE"
+        ```
+      operationId: adminListApiKeyRequests
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+            example: pending
+        - name: user
+          in: query
+          description: Filter by username
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search in business name/email
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminApiKeyRequestListResponse"
+              examples:
+                allRequests:
+                  summary: All pending requests
+                  value:
+                    code: "API_KEY_REQUESTS_FETCHED"
+                    message: "API key requests retrieved successfully"
+                    requests:
+                      - request_id: "550e8400-e29b-41d4-a716-446655440000"
+                        user: "johndoe"
+                        business_name: "Fashion Store Ltd"
+                        business_email: "api@fashionstore.com"
+                        use_case: "E-commerce integration"
+                        expected_usage: "10,000 requests/month"
+                        status: "pending"
+                        created_at: "2025-11-20T10:00:00Z"
+                      - request_id: "660e8400-e29b-41d4-a716-446655440001"
+                        user: "janedoe"
+                        business_name: "Tech Solutions Inc"
+                        business_email: "dev@techsolutions.com"
+                        use_case: "Mobile app integration"
+                        expected_usage: "25,000 requests/month"
+                        status: "pending"
+                        created_at: "2025-11-19T15:30:00Z"
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total: 2
+                      pages: 1
+        "401":
+          description: Authentication required
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                code: SYS001
-                message: Internal server error
-                detail: An unexpected error occurred
+        "403":
+          description: Insufficient permissions (not staff/admin)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/api-key-requests/{request_id}/:
+    get:
+      tags:
+        - Admin - API Key Requests
+      summary: Get Request Details (Staff/Admin)
+      description: |
+        Get detailed information about any API key request (Staff/Admin only).
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+      operationId: adminGetApiKeyRequestDetail
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Request details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminApiKeyRequestDetailResponse"
+
+  /admin/api-key-requests/{request_id}/approve/:
+    post:
+      tags:
+        - Admin - API Key Requests
+      summary: Approve API Key Request (Staff/Admin)
+      description: |
+        Approve an API key request and grant user API key generation access.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Process:**
+        1. Validates request is pending
+        2. Sets user quotas and limits
+        3. Enables API key generation for user
+        4. Records approval details (payment, notes, etc.)
+        5. Notifies user of approval
+
+        **What happens on approval:**
+        - User's `api_key_generation_enabled` → `true`
+        - User's `max_api_keys` set to approved value
+        - User's `user_monthly_quota` set to approved value
+        - User can now create API keys within limits
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/internal/api/admin/api-key-requests/550e8400-e29b-41d4-a716-446655440000/approve/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: multipart/form-data" \
+          -F "max_api_keys=5" \
+          -F "user_monthly_quota=50000" \
+          -F "payment_date=2025-11-20" \
+          -F "payment_proof=@/path/to/receipt.pdf" \
+          -F "admin_notes=Approved for premium tier"
+        ```
+      operationId: adminApproveApiKeyRequest
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ApiKeyRequestApprovalRequest"
+            examples:
+              basicApproval:
+                summary: Basic approval
+                value:
+                  max_api_keys: 3
+                  user_monthly_quota: 10000
+              premiumApproval:
+                summary: Premium approval with payment
+                value:
+                  max_api_keys: 10
+                  user_monthly_quota: 100000
+                  payment_date: "2025-11-20"
+                  admin_notes: "Premium tier - annual subscription"
+                  approved_use_case: "High-volume e-commerce integration"
+      responses:
+        "200":
+          description: Request approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyRequestResponse"
+              examples:
+                approved:
+                  summary: Request approved
+                  value:
+                    code: "API_KEY_REQUEST_APPROVED"
+                    message: "API key request approved successfully"
+                    request:
+                      request_id: "550e8400-e29b-41d4-a716-446655440000"
+                      user: "johndoe"
+                      business_name: "Fashion Store Ltd"
+                      status: "approved"
+                      approved_by: "admin_user"
+                      approved_at: "2025-11-20T14:30:00Z"
+                      max_api_keys: 5
+                      user_monthly_quota: 50000
+                      payment_date: "2025-11-20"
+                      admin_notes: "Approved for premium tier"
+        "400":
+          description: Invalid request or already processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/api-key-requests/{request_id}/reject/:
+    post:
+      tags:
+        - Admin - API Key Requests
+      summary: Reject API Key Request (Staff/Admin)
+      description: |
+        Reject an API key request with reason.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Process:**
+        1. Validates request is pending
+        2. Records rejection reason and details
+        3. Notifies user of rejection
+        4. User can submit a new request later
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/internal/api/admin/api-key-requests/550e8400-e29b-41d4-a716-446655440000/reject/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "rejection_reason": "Use case does not align with our service offerings",
+            "admin_notes": "User requested features not available"
+          }'
+        ```
+      operationId: adminRejectApiKeyRequest
+      parameters:
+        - name: request_id
+
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyRequestRejectionRequest"
+            examples:
+              rejection:
+                summary: Reject with reason
+                value:
+                  rejection_reason: "Use case does not align with our service offerings"
+                  admin_notes: "User requested features not available in current API version"
+      responses:
+        "200":
+          description: Request rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyRequestResponse"
+              examples:
+                rejected:
+                  summary: Request rejected
+                  value:
+                    code: "API_KEY_REQUEST_REJECTED"
+                    message: "API key request rejected"
+                    request:
+                      request_id: "550e8400-e29b-41d4-a716-446655440000"
+                      user: "johndoe"
+                      status: "rejected"
+                      rejected_by: "admin_user"
+                      rejected_at: "2025-11-20T14:30:00Z"
+                      rejection_reason: "Use case does not align with our service offerings"
+        "400":
+          description: Invalid request or already processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -3354,24 +2760,62 @@ components:
           properties:
             max_api_keys:
               type: integer
+              description: Maximum API keys allowed
             current_api_keys:
               type: integer
+              description: Current number of API keys
             can_create_more:
-              type: boolean
+              type: array
+              items:
+                oneOf:
+                  - type: boolean
+                  - type: string
+              description: "Tuple: [can_create: boolean, error_message: string]"
+              example: [true, ""]
             api_key_generation_enabled:
               type: boolean
+              description: Whether user is approved to create API keys
             user_monthly_quota:
               type: integer
+              description: Total monthly quota across all user's API keys
             cumulative_quota_used:
               type: integer
+              description: Total quota used this month
             quota_remaining:
               type: integer
+              description: Remaining quota for the month
             default_rate_limits:
               type: object
+              properties:
+                per_minute:
+                  type: integer
+                per_hour:
+                  type: integer
+                per_day:
+                  type: integer
+                monthly_quota:
+                  type: integer
             api_keys_summary:
               type: array
               items:
                 type: object
+                properties:
+                  key_id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  status:
+                    type: string
+                  requests_this_month:
+                    type: integer
+                  monthly_quota:
+                    type: integer
+                  quota_remaining:
+                    type: integer
+                  last_used_at:
+                    type: string
+                    format: date-time
 
     # Admin Schemas
     UpdateUserQuotaRequest:
@@ -3786,39 +3230,273 @@ components:
         active_api_keys:
           type: integer
 
-    # Common Schemas
-    SuccessResponse:
+    # New API Key Request Schemas
+    ApiKeyRequestSubmitRequest:
+      type: object
+      required:
+        - business_name
+        - business_email
+        - use_case
+        - expected_usage
+      properties:
+        business_name:
+          type: string
+          maxLength: 200
+          description: Name of business/organization
+          example: "Fashion Store Ltd"
+        business_email:
+          type: string
+          format: email
+          description: Business contact email
+          example: "api@fashionstore.com"
+        use_case:
+          type: string
+          description: Detailed description of intended API usage
+          example: "Virtual try-on integration for our e-commerce platform"
+        expected_usage:
+          type: string
+          description: Expected monthly request volume
+          example: "Approximately 10,000 requests per month"
+        website:
+          type: string
+          format: uri
+          description: Business website URL (optional)
+          example: "https://fashionstore.com"
+        additional_info:
+          type: string
+          description: Any additional information (optional)
+          example: "We plan to integrate on all product pages"
+
+    ApiKeyRequestDetail:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          description: Unique request identifier
+        user:
+          type: string
+          description: Username of requester
+        business_name:
+          type: string
+        business_email:
+          type: string
+          format: email
+        use_case:
+          type: string
+        expected_usage:
+          type: string
+        website:
+          type: string
+          format: uri
+        additional_info:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          description: Current request status
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        # Approval fields (only if approved)
+        approved_by:
+          type: string
+          nullable: true
+          description: Username of approving staff/admin
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        max_api_keys:
+          type: integer
+          nullable: true
+          description: Maximum API keys granted
+        user_monthly_quota:
+          type: integer
+          nullable: true
+          description: Total monthly quota granted
+        payment_date:
+          type: string
+          format: date
+          nullable: true
+        payment_proof:
+          type: string
+          nullable: true
+          description: URL to payment proof file
+        approved_use_case:
+          type: string
+          nullable: true
+        admin_notes:
+          type: string
+          nullable: true
+        # Rejection fields (only if rejected)
+        rejected_by:
+          type: string
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejection_reason:
+          type: string
+          nullable: true
+
+    ApiKeyRequestResponse:
       type: object
       properties:
         code:
           type: string
         message:
           type: string
+        request:
+          $ref: "#/components/schemas/ApiKeyRequestDetail"
 
-    ErrorResponse:
+    ApiKeyRequestDetailResponse:
       type: object
       properties:
         code:
           type: string
         message:
           type: string
-        errors:
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              type: string
-        detail:
-          type: string
+        request:
+          $ref: "#/components/schemas/ApiKeyRequestDetail"
 
-    Pagination:
+    ApiKeyRequestListResponse:
       type: object
       properties:
-        page:
+        code:
+          type: string
+        message:
+          type: string
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyRequestDetail"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AdminApiKeyRequestListResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyRequestDetail"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    AdminApiKeyRequestDetailResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        request:
+          $ref: "#/components/schemas/ApiKeyRequestDetail"
+
+    ApiKeyRequestApprovalRequest:
+      type: object
+      required:
+        - max_api_keys
+        - user_monthly_quota
+      properties:
+        max_api_keys:
           type: integer
-        limit:
+          minimum: 1
+          default: 3
+          description: Maximum number of API keys user can create
+          example: 5
+        user_monthly_quota:
           type: integer
-        total:
-          type: integer
-        pages:
-          type: integer
+          minimum: 1
+          default: 10000
+          description: Total monthly quota across all user's API keys
+          example: 50000
+        payment_date:
+          type: string
+          format: date
+          description: Date when payment was received (optional)
+          example: "2025-11-20"
+        payment_proof:
+          type: string
+          format: binary
+          description: Payment receipt/proof file upload (optional)
+        admin_notes:
+          type: string
+          description: Internal notes about the approval (optional)
+          example: "Approved for premium tier - annual subscription paid"
+        approved_use_case:
+          type: string
+          description: Admin-approved description of use case (optional)
+          example: "High-volume e-commerce integration"
+
+    ApiKeyRequestRejectionRequest:
+      type: object
+      required:
+        - rejection_reason
+      properties:
+        rejection_reason:
+          type: string
+          description: Reason for rejecting the request
+          example: "Use case does not align with our service offerings"
+        admin_notes:
+          type: string
+          description: Internal notes about the rejection (optional)
+          example: "User requested features not available"
+
+  # Common Schemas
+  SuccessResponse:
+    type: object
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+
+  ErrorResponse:
+    type: object
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+      detail:
+        type: string
+        nullable: true
+      errors:
+        type: object
+        nullable: true
+
+  Pagination:
+    type: object
+    properties:
+      page:
+        type: integer
+      limit:
+        type: integer
+      total:
+        type: integer
+      pages:
+        type: integer
+
+securitySchemes:
+  bearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
+    description: |
+      JWT authentication. Include the access token in the Authorization header:
+      ```
+      Authorization: Bearer <access_token>
+      ```
+
+security:
+  - bearerAuth: []

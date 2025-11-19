@@ -3,6 +3,7 @@ from django.utils.html import format_html
 from .models import (
     UserData,
     APIKey,
+    APIKeyRequest,
     Store,
     VTONRequest,
     SubscriptionPlan,
@@ -19,14 +20,27 @@ from .models import (
 class UserDataAdmin(admin.ModelAdmin):
     list_display = ["user", "user_type", "is_verified", "is_premium", "is_active", "created_at"]
     list_filter = ["user_type", "is_verified", "is_premium", "is_active", "created_at"]
-    search_fields = ["user__username", "user__email", "company_name", "phone_number"]
+    search_fields = ["user__username", "user__email", "phone_number"]
     readonly_fields = ["created_at", "updated_at"]
 
     fieldsets = (
         ("User Information", {"fields": ("user", "user_type", "phone_number")}),
-        ("Business Information", {"fields": ("company_name", "tax_id")}),
-        ("Address", {"fields": ("address_line1", "address_line2", "city", "state", "country", "postal_code")}),
+        ("Address", {"fields": ("city", "state", "country", "postal_code")}),
         ("Account Status", {"fields": ("is_verified", "is_premium", "premium_expiry", "is_active", "is_suspended", "suspension_reason", "suspended_at")}),
+        (
+            "API Key Settings",
+            {
+                "fields": (
+                    "max_api_keys",
+                    "api_key_generation_enabled",
+                    "user_monthly_quota",
+                    "default_rate_limit_per_minute",
+                    "default_rate_limit_per_hour",
+                    "default_rate_limit_per_day",
+                    "default_monthly_quota",
+                )
+            },
+        ),
         ("Timestamps", {"fields": ("created_at", "updated_at", "last_login_at")}),
         ("Metadata", {"fields": ("metadata",), "classes": ("collapse",)}),
     )
@@ -45,6 +59,57 @@ class APIKeyAdmin(admin.ModelAdmin):
         ("Security", {"fields": ("allowed_domains", "allowed_ips")}),
         ("Timestamps", {"fields": ("created_at", "last_used_at", "expires_at")}),
     )
+
+
+@admin.register(APIKeyRequest)
+class APIKeyRequestAdmin(admin.ModelAdmin):
+    list_display = ["request_id", "user", "requested_key_name", "status", "created_at", "reviewed_by", "payment_amount"]
+    list_filter = ["status", "created_at", "reviewed_at"]
+    search_fields = ["request_id", "user__username", "requested_key_name", "reason"]
+    readonly_fields = ["request_id", "created_at", "updated_at"]
+    date_hierarchy = "created_at"
+
+    fieldsets = (
+        ("Request Information", {"fields": ("request_id", "user", "requested_key_name", "reason", "intended_use", "status")}),
+        (
+            "Requested Settings",
+            {
+                "fields": (
+                    "requested_rate_limit_per_minute",
+                    "requested_rate_limit_per_hour",
+                    "requested_rate_limit_per_day",
+                    "requested_monthly_quota",
+                )
+            },
+        ),
+        (
+            "Approval Details",
+            {
+                "fields": (
+                    "reviewed_by",
+                    "reviewed_at",
+                    "approved_rate_limit_per_minute",
+                    "approved_rate_limit_per_hour",
+                    "approved_rate_limit_per_day",
+                    "approved_monthly_quota",
+                    "approved_expires_in_days",
+                )
+            },
+        ),
+        ("Payment Information", {"fields": ("payment_date", "payment_amount", "payment_proof", "admin_notes")}),
+        ("Rejection Details", {"fields": ("rejection_reason",)}),
+        ("Generated API Key", {"fields": ("generated_api_key",)}),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+        ("Metadata", {"fields": ("metadata",), "classes": ("collapse",)}),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        """Make certain fields readonly after creation."""
+        readonly = list(self.readonly_fields)
+        if obj and obj.status != "pending":
+            # Once reviewed, lock the request details
+            readonly.extend(["user", "requested_key_name", "reason", "intended_use"])
+        return readonly
 
 
 @admin.register(Store)
@@ -89,8 +154,8 @@ class VTONRequestAdmin(admin.ModelAdmin):
                 )
             },
         ),
-        ("Processing", {"fields": ("instructions", "cloths_on", "status", "error_message")}),
-        ("Metrics", {"fields": ("processing_started_at", "processing_completed_at", "processing_duration_seconds", "quality_score", "confidence_score")}),
+        ("Processing", {"fields": ("status", "error_message")}),
+        ("Metrics", {"fields": ("processing_started_at", "processing_completed_at", "processing_duration_seconds")}),
         ("Result Tracking", {"fields": ("is_saved", "is_shared")}),
         ("Timestamps", {"fields": ("created_at", "updated_at", "completed_at")}),
         ("Metadata", {"fields": ("metadata",), "classes": ("collapse",)}),

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import auth_views, client_api_management_views, admin_views, docs_views
+from .views import auth_views, client_api_management_views, admin_views, docs_views, client_api_request_views, admin_api_request_views
 
 app_name = "internal_api"
 
@@ -25,6 +25,11 @@ urlpatterns = [
     path("api-keys/<uuid:key_id>/stats/", client_api_management_views.get_api_key_stats, name="api-key-stats"),  # Get API key stats
     # User Quota endpoints (JWT authentication required)
     path("quota/me/", client_api_management_views.get_my_quota, name="get-my-quota"),  # Get current user's quota info
+    # API Key Request endpoints (JWT authentication required - non-admin users)
+    path("api-key-requests/submit/", client_api_request_views.submit_api_key_request, name="submit-api-key-request"),  # Submit new API key request
+    path("api-key-requests/", client_api_request_views.list_my_api_key_requests, name="list-my-api-key-requests"),  # List user's requests
+    path("api-key-requests/<uuid:request_id>/", client_api_request_views.get_api_key_request_detail, name="get-api-key-request-detail"),  # Get request details
+    path("api-key-requests/<uuid:request_id>/cancel/", client_api_request_views.cancel_api_key_request, name="cancel-api-key-request"),  # Cancel pending request
     # Admin endpoints (Admin only - JWT authentication + admin permission required)
     # User Management
     path("admin/users/", admin_views.list_all_users, name="admin-list-users"),  # List all users with filters
@@ -33,7 +38,7 @@ urlpatterns = [
     # Quota Management
     path("admin/users/quotas/", admin_views.list_all_users_quotas, name="admin-list-user-quotas"),  # List all users with quotas
     path("admin/users/search/", admin_views.search_users, name="admin-search-users"),  # Search for users
-    # User-specific endpoints 
+    # User-specific endpoints
     path("admin/users/id/<int:user_id>/", admin_views.get_user_by_id, name="admin-get-user-by-id"),  # Get user by ID
     path("admin/users/<str:username>/", admin_views.get_user_details, name="admin-get-user-details"),  # Get user by username (comprehensive)
     path("admin/users/<str:username>/update/", admin_views.update_user, name="admin-update-user"),  # Update user info
@@ -49,6 +54,17 @@ urlpatterns = [
     path("admin/api-keys/", admin_views.list_all_api_keys, name="admin-list-all-api-keys"),  # List all API keys (all users)
     path("admin/api-keys/<uuid:key_id>/update/", admin_views.admin_update_api_key, name="admin-update-api-key"),  # Admin update any API key
     path("admin/api-keys/<uuid:key_id>/delete/", admin_views.admin_delete_api_key, name="admin-delete-api-key"),  # Admin delete any API key
+    # API Key Request Management (Admin only)
+    path("admin/api-key-requests/", admin_api_request_views.admin_list_api_key_requests, name="admin-list-api-key-requests"),  # List all API key requests
+    path(
+        "admin/api-key-requests/<uuid:request_id>/", admin_api_request_views.admin_get_api_key_request_detail, name="admin-get-api-key-request-detail"
+    ),  # Get request details
+    path(
+        "admin/api-key-requests/<uuid:request_id>/approve/", admin_api_request_views.admin_approve_api_key_request, name="admin-approve-api-key-request"
+    ),  # Approve request
+    path(
+        "admin/api-key-requests/<uuid:request_id>/reject/", admin_api_request_views.admin_reject_api_key_request, name="admin-reject-api-key-request"
+    ),  # Reject request
     # API Documentation endpoints
     path("docs/", docs_views.api_docs_info, name="api-docs-info"),  # Get information about available API documentation
     path("docs/client-api-spec/", docs_views.client_api_spec, name="client-api-spec"),  # Public: Client API OpenAPI spec

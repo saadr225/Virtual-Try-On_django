@@ -40,7 +40,12 @@ class UserData(models.Model):
 
     # API Key Management Settings (Admin-controlled)
     max_api_keys = models.IntegerField(default=5, help_text="Maximum number of API keys user can create")
-    api_key_generation_enabled = models.BooleanField(default=True, help_text="Whether user can generate new API keys")
+    api_key_generation_enabled = models.BooleanField(default=False, help_text="Whether user can generate new API keys - set by admin when approving request")
+
+    # API Key Request Approval (set by admin)
+    is_api_approved = models.BooleanField(default=False, help_text="Whether user is approved to create API keys")
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_users", help_text="Admin who approved the user")
+    approved_at = models.DateTimeField(null=True, blank=True, help_text="When the user was approved")
 
     # User-Level Quota Settings (Admin-controlled)
     user_monthly_quota = models.IntegerField(default=1000, help_text="Total monthly quota across all user's API keys")
@@ -85,6 +90,9 @@ class UserData(models.Model):
 
     def can_create_api_key(self):
         """Check if user can create a new API key."""
+        if not self.is_api_approved:
+            return False, "Your account is not approved for API key generation. Please submit a request first."
+
         if not self.api_key_generation_enabled:
             return False, "API key generation is disabled for your account"
 

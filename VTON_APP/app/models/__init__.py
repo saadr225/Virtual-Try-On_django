@@ -5,6 +5,7 @@ from .vton_models import VTONRequest
 from .subscription_models import SubscriptionPlan, Subscription, Invoice
 from .analytics_models import APIUsageLog, DailyUsageStats
 from .audit_models import AuditLog, SystemConfiguration
+from .api_request_models import APIKeyRequest
 
 __all__ = [
     "UserData",
@@ -18,4 +19,5 @@ __all__ = [
     "DailyUsageStats",
     "AuditLog",
     "SystemConfiguration",
+    "APIKeyRequest",
 ]

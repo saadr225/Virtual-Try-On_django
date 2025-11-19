@@ -23,8 +23,8 @@ def is_admin_user(user):
     if not user or not user.is_authenticated:
         return False
 
-    # Check Django admin status
-    if user.is_staff or user.is_superuser:
+    # Check Django admin/superuser status
+    if user.is_superuser:
         return True
 
     # Check user_type in UserData
@@ -33,6 +33,30 @@ def is_admin_user(user):
             return True
     except Exception:
         pass
+
+    return False
+
+
+def is_staff_user(user):
+    """
+    Check if user is a staff member (can manage API key requests).
+
+    Args:
+        user: Django User object
+
+    Returns:
+        bool: True if user is staff or admin
+    """
+    if not user or not user.is_authenticated:
+        return False
+
+    # Superusers and admins are staff
+    if user.is_superuser or is_admin_user(user):
+        return True
+
+    # Check Django staff status
+    if user.is_staff:
+        return True
 
     return False
 
@@ -117,6 +141,19 @@ class IsAdminUser(BasePermission):
         return is_admin_user(request.user)
 
 
+class IsStaffUser(BasePermission):
+    """
+    DRF Permission class: Only staff users (including admins) are allowed.
+
+    Usage:
+        class MyView(APIView):
+            permission_classes = [IsAuthenticated, IsStaffUser]
+    """
+
+    def has_permission(self, request, view):
+        return is_staff_user(request.user)
+
+
 class IsNotAdminUser(BasePermission):
     """
     DRF Permission class: Only non-admin users are allowed.
@@ -169,6 +206,7 @@ def get_user_permissions(user):
     """
     return {
         "is_admin": is_admin_user(user),
+        "is_staff": is_staff_user(user),
         "can_modify_quotas": can_modify_quotas(user),
         "can_manage_all_keys": can_manage_all_keys(user),
         "can_manage_user_quotas": can_manage_user_quotas(user),

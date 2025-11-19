@@ -63,49 +63,44 @@ def create_response(code_key: str, data: dict = None, http_status: int = None):
 @csrf_exempt
 def create_api_key(request):
     """
-    Create a new API key for the authenticated user.
+    Create a new API key (only if user is approved by admin).
 
-    Admin users cannot use this endpoint - they should use admin API key management.
+    Users must first have their API key request approved by admin.
+    Once approved, they can create API keys within their quota limits.
+    Admin users should use admin API key management endpoints.
 
     POST /internal/api/api-keys/create/
 
     Request Body:
-        - name: string (required) - Unique name for the key
-        - expires_in_days: integer (optional, null = never expires)
-
-    Admin-Only Parameters:
-        - rate_limit_per_minute: integer (optional, default: 100)
-        - rate_limit_per_hour: integer (optional, default: 1000)
-        - rate_limit_per_day: integer (optional, default: 10000)
-        - monthly_quota: integer (optional, default: 500)
-        - allowed_domains: array (optional, empty = all allowed)
-        - allowed_ips: array (optional, empty = all allowed)
-
-    Note: Non-admin users cannot set rate limits or domain/IP restrictions.
-    These must be configured by administrators.
+        - name: string (required) - Name for the API key
 
     Response Codes:
         - API101: API key created successfully
-        - API011: API key name is required
-        - API012: API key name already exists
-        - API006: Error creating API key
+        - AUT002: User not approved for API key generation
+        - USR017: Maximum API keys limit reached
         - SYS004: Validation error
-        - AUT002: Only admins can set rate limits or restrictions
     """
-    serializer = APIKeyCreateSerializer(data=request.data, context={"request": request})
-
-    if not serializer.is_valid():
-        errors = serializer.errors
-
-        if "name" in errors:
-            if "required" in str(errors["name"]).lower():
-                return create_response("API_KEY_NAME_REQUIRED", {"errors": errors}, status.HTTP_400_BAD_REQUEST)
-            elif "exist" in str(errors["name"]).lower():
-                return create_response("API_KEY_NAME_DUPLICATE", {"errors": errors}, status.HTTP_409_CONFLICT)
-
-        return create_response("VALIDATION_ERROR", {"errors": errors}, status.HTTP_400_BAD_REQUEST)
-
     try:
+        user_data, created = UserData.objects.get_or_create(user=request.user)
+
+        # Check if user is approved
+        can_create, error_message = user_data.can_create_api_key()
+        if not can_create:
+            return create_response(
+                "UNAUTHORIZED",
+                {
+                    "error": error_message,
+                    "message": "Please submit an API key request if you haven't already",
+                    "help": "Use the /internal/api/api-key-requests/submit/ endpoint to request API key access",
+                },
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = APIKeyCreateSerializer(data=request.data, context={"request": request})
+
+        if not serializer.is_valid():
+            return create_response("VALIDATION_ERROR", {"errors": serializer.errors}, status.HTTP_400_BAD_REQUEST)
+
         api_key = serializer.save()
 
         # Log API key creation
@@ -115,13 +110,14 @@ def create_api_key(request):
             resource_type="APIKey",
             resource_id=str(api_key.key_id),
             description=f"API key '{api_key.name}' created",
+            new_values={"name": api_key.name, "key_id": str(api_key.key_id)},
             ip_address=request.META.get("REMOTE_ADDR"),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
 
         logger.info(f"API key created: {api_key.name} by {request.user.username}")
 
-        # Return detailed serializer with full key (only shown once)
+        # Return created key (only shown this time)
         detail_serializer = APIKeyDetailSerializer(api_key)
 
         return create_response("API_KEY_CREATED", {"api_key": detail_serializer.data}, status.HTTP_201_CREATED)
