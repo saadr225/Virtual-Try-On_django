@@ -1854,11 +1854,10 @@ paths:
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
           -H "Content-Type: application/json" \
           -d '{
-            "business_name": "Fashion Store Ltd",
-            "business_email": "api@fashionstore.com",
-            "use_case": "Virtual try-on integration for e-commerce",
-            "expected_usage": "Approximately 10,000 requests per month",
-            "website": "https://fashionstore.com"
+            "requested_key_name": "Production API Key",
+            "reason": "Need API access for production e-commerce integration",
+            "intended_use": "Virtual try-on integration for our e-commerce platform with approximately 10,000 requests per month",
+            "requested_monthly_quota": 50000
           }'
         ```
       operationId: submitApiKeyRequest
@@ -1872,12 +1871,19 @@ paths:
               basicRequest:
                 summary: Basic API key request
                 value:
-                  business_name: "Fashion Store Ltd"
-                  business_email: "api@fashionstore.com"
-                  use_case: "Virtual try-on integration for our e-commerce platform"
-                  expected_usage: "Approximately 10,000 requests per month"
-                  website: "https://fashionstore.com"
-                  additional_info: "We plan to integrate on all product pages"
+                  requested_key_name: "Production API Key"
+                  reason: "Need API access for production e-commerce integration"
+                  intended_use: "Virtual try-on integration for our e-commerce platform with approximately 10,000 requests per month"
+              withRateLimits:
+                summary: Request with rate limit suggestions
+                value:
+                  requested_key_name: "High Volume API Key"
+                  reason: "Large scale production deployment"
+                  intended_use: "Enterprise e-commerce platform integration"
+                  requested_rate_limit_per_minute: 200
+                  requested_rate_limit_per_hour: 5000
+                  requested_rate_limit_per_day: 50000
+                  requested_monthly_quota: 100000
       responses:
         "201":
           description: API key request submitted successfully
@@ -1894,19 +1900,14 @@ paths:
                     request:
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
                       user: "johndoe"
-                      business_name: "Fashion Store Ltd"
-                      business_email: "api@fashionstore.com"
-                      use_case: "Virtual try-on integration for e-commerce"
-                      expected_usage: "Approximately 10,000 requests per month"
-                      website: "https://fashionstore.com"
-                      additional_info: "We plan to integrate on all product pages"
+                      requested_key_name: "Production API Key"
+                      reason: "Need API access for production e-commerce integration"
+                      intended_use: "Virtual try-on integration for our e-commerce platform with approximately 10,000 requests per month"
                       status: "pending"
                       created_at: "2025-11-20T10:00:00Z"
                       updated_at: "2025-11-20T10:00:00Z"
-                      approved_by: null
-                      approved_at: null
-                      rejected_by: null
-                      rejected_at: null
+                      reviewed_by: null
+                      reviewed_at: null
         "400":
           description: Validation error or duplicate pending request
           content:
@@ -1926,7 +1927,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api-key-requests/my-requests/:
+  /api-key-requests/:
     get:
       tags:
         - API Key Requests
@@ -1947,7 +1948,7 @@ paths:
 
         **Example cURL Request:**
         ```bash
-        curl -X GET "https://your-domain.com/internal/api/api-key-requests/my-requests/?status=pending" \
+        curl -X GET "https://your-domain.com/internal/api/api-key-requests/?status=pending" \
           -H "accept: application/json" \
           -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
         ```
@@ -1991,13 +1992,12 @@ paths:
                     requests:
                       - request_id: "550e8400-e29b-41d4-a716-446655440000"
                         user: "johndoe"
-                        business_name: "Fashion Store Ltd"
+                        requested_key_name: "Production API Key"
+                        reason: "Need API access for production"
                         status: "approved"
                         created_at: "2025-11-15T10:00:00Z"
-                        approved_by: "admin_user"
-                        approved_at: "2025-11-16T14:30:00Z"
-                        max_api_keys: 5
-                        user_monthly_quota: 50000
+                        reviewed_by: "admin_user"
+                        reviewed_at: "2025-11-16T14:30:00Z"
                     pagination:
                       page: 1
                       limit: 10
@@ -2042,6 +2042,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiKeyRequestDetailResponse"
+        "403":
+          description: Access denied - not your request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api-key-requests/{request_id}/cancel/:
+    post:
+      tags:
+        - API Key Requests
+      summary: Cancel Pending API Key Request
+      description: |
+        Cancel a pending API key request.
+
+        **Authentication:** Required (JWT access token)
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Access Control:** Users can only cancel their own pending requests.
+
+        **Process:**
+        1. Validates request is pending
+        2. Sets status to cancelled
+        3. Records cancellation details
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/internal/api/api-key-requests/550e8400-e29b-41d4-a716-446655440000/cancel/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{"confirm": true}'
+        ```
+      operationId: cancelApiKeyRequest
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          description: UUID of the API key request
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirm
+              properties:
+                confirm:
+                  type: boolean
+                  description: Must be true to confirm cancellation
+                  example: true
+      responses:
+        "200":
+          description: Request cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyRequestResponse"
+              examples:
+                cancelled:
+                  summary: Request cancelled
+                  value:
+                    code: "API_KEY_REQUEST_CANCELLED"
+                    message: "API key request cancelled successfully"
+                    request:
+                      request_id: "550e8400-e29b-41d4-a716-446655440000"
+                      user: "johndoe"
+                      status: "cancelled"
+                      created_at: "2025-11-20T10:00:00Z"
+        "400":
+          description: Request cannot be cancelled (not pending)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Access denied - not your request
           content:
@@ -2131,20 +2219,24 @@ paths:
                     requests:
                       - request_id: "550e8400-e29b-41d4-a716-446655440000"
                         user: "johndoe"
-                        business_name: "Fashion Store Ltd"
-                        business_email: "api@fashionstore.com"
-                        use_case: "E-commerce integration"
-                        expected_usage: "10,000 requests/month"
+                        requested_key_name: "Production API Key"
+                        reason: "E-commerce integration"
                         status: "pending"
                         created_at: "2025-11-20T10:00:00Z"
+                        reviewed_by: null
+                        reviewed_at: null
+                        payment_date: null
+                        payment_amount: null
                       - request_id: "660e8400-e29b-41d4-a716-446655440001"
                         user: "janedoe"
-                        business_name: "Tech Solutions Inc"
-                        business_email: "dev@techsolutions.com"
-                        use_case: "Mobile app integration"
-                        expected_usage: "25,000 requests/month"
+                        requested_key_name: "Mobile App Key"
+                        reason: "Mobile app integration"
                         status: "pending"
                         created_at: "2025-11-19T15:30:00Z"
+                        reviewed_by: null
+                        reviewed_at: null
+                        payment_date: null
+                        payment_amount: null
                     pagination:
                       page: 1
                       limit: 20
@@ -2272,13 +2364,16 @@ paths:
                     request:
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
                       user: "johndoe"
-                      business_name: "Fashion Store Ltd"
+                      requested_key_name: "Production API Key"
                       status: "approved"
-                      approved_by: "admin_user"
-                      approved_at: "2025-11-20T14:30:00Z"
-                      max_api_keys: 5
-                      user_monthly_quota: 50000
+                      reviewed_by: "admin_user"
+                      reviewed_at: "2025-11-20T14:30:00Z"
+                      approved_rate_limit_per_minute: 100
+                      approved_rate_limit_per_hour: 1000
+                      approved_rate_limit_per_day: 10000
+                      approved_monthly_quota: 50000
                       payment_date: "2025-11-20"
+                      payment_amount: 99.99
                       admin_notes: "Approved for premium tier"
         "400":
           description: Invalid request or already processed
@@ -2362,9 +2457,10 @@ paths:
                     request:
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
                       user: "johndoe"
+                      requested_key_name: "Production API Key"
                       status: "rejected"
-                      rejected_by: "admin_user"
-                      rejected_at: "2025-11-20T14:30:00Z"
+                      reviewed_by: "admin_user"
+                      reviewed_at: "2025-11-20T14:30:00Z"
                       rejection_reason: "Use case does not align with our service offerings"
         "400":
           description: Invalid request or already processed
@@ -2447,6 +2543,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserListResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/create/:
+    post:
+      tags:
+        - Admin
+      summary: Create New User (Admin Only)
+      description: |
+        Create a new user account.
+
+        **Authentication:** Required (JWT access token)
+        **Authorization:** Staff or Admin role required
+
+        **Request Headers:**
+        - `Authorization: Bearer <access_token>`
+
+        **Example cURL Request:**
+        ```bash
+        curl -X POST "https://your-domain.com/internal/api/admin/users/create/" \
+          -H "accept: application/json" \
+          -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "username": "newuser",
+            "email": "newuser@example.com",
+            "password": "SecurePassword123",
+            "first_name": "John",
+            "last_name": "Doe",
+            "user_type": "customer"
+          }'
+        ```
+      operationId: adminCreateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+                - first_name
+                - last_name
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 150
+                  example: "newuser"
+                email:
+                  type: string
+                  format: email
+                  example: "newuser@example.com"
+                password:
+                  type: string
+                  minLength: 8
+                  example: "SecurePassword123"
+                first_name:
+                  type: string
+                  example: "John"
+                last_name:
+                  type: string
+                  example: "Doe"
+                user_type:
+                  type: string
+                  enum: [customer, store_owner, admin]
+                  default: customer
+                  example: "customer"
+                phone_number:
+                  type: string
+                  maxLength: 20
+                  example: "+1234567890"
+                is_verified:
+                  type: boolean
+                  default: false
+                  example: true
+                is_premium:
+                  type: boolean
+                  default: false
+                  example: false
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserDetailResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Authentication required
           content:
@@ -3517,11 +3718,10 @@ components:
           type: string
         api_key:
           type: string
-          description: Full API key (only shown on creation/regeneration)
-        api_key_preview:
-          type: string
+          description: Masked API key (e.g., vton_sk...1234) or full key on creation/regeneration
         status:
           type: string
+          enum: [active, inactive, suspended]
         created_at:
           type: string
           format: date-time
@@ -3533,6 +3733,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        is_expired:
+          type: boolean
+          description: Whether the API key has expired
         rate_limit_per_minute:
           type: integer
         rate_limit_per_hour:
@@ -3540,10 +3743,6 @@ components:
         rate_limit_per_day:
           type: integer
         monthly_quota:
-          type: integer
-        total_requests:
-          type: integer
-        requests_this_month:
           type: integer
         allowed_domains:
           type: array
@@ -4095,38 +4294,46 @@ components:
     ApiKeyRequestSubmitRequest:
       type: object
       required:
-        - business_name
-        - business_email
-        - use_case
-        - expected_usage
+        - requested_key_name
+        - reason
       properties:
-        business_name:
+        requested_key_name:
           type: string
-          maxLength: 200
-          description: Name of business/organization
-          example: "Fashion Store Ltd"
-        business_email:
+          maxLength: 100
+          description: Name for the requested API key
+          example: "Production API Key"
+        reason:
           type: string
-          format: email
-          description: Business contact email
-          example: "api@fashionstore.com"
-        use_case:
+          description: Reason for requesting an API key
+          example: "Need API access for production e-commerce integration"
+        intended_use:
           type: string
-          description: Detailed description of intended API usage
-          example: "Virtual try-on integration for our e-commerce platform"
-        expected_usage:
-          type: string
-          description: Expected monthly request volume
-          example: "Approximately 10,000 requests per month"
-        website:
-          type: string
-          format: uri
-          description: Business website URL (optional)
-          example: "https://fashionstore.com"
-        additional_info:
-          type: string
-          description: Any additional information (optional)
-          example: "We plan to integrate on all product pages"
+          description: Description of intended use (optional)
+          example: "Virtual try-on integration for our e-commerce platform with approximately 10,000 requests per month"
+        requested_rate_limit_per_minute:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Requested per-minute rate limit (optional suggestion)
+          example: 100
+        requested_rate_limit_per_hour:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Requested per-hour rate limit (optional suggestion)
+          example: 1000
+        requested_rate_limit_per_day:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Requested per-day rate limit (optional suggestion)
+          example: 10000
+        requested_monthly_quota:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Requested monthly quota (optional suggestion)
+          example: 50000
 
     ApiKeyRequestDetail:
       type: object
@@ -4138,72 +4345,100 @@ components:
         user:
           type: string
           description: Username of requester
-        business_name:
+        requested_key_name:
           type: string
-        business_email:
+          description: Name for the requested API key
+        reason:
           type: string
-          format: email
-        use_case:
+          description: Reason for requesting API key
+        intended_use:
           type: string
-        expected_usage:
-          type: string
-        website:
-          type: string
-          format: uri
-        additional_info:
-          type: string
+          nullable: true
+          description: Description of intended use
         status:
           type: string
-          enum: [pending, approved, rejected]
+          enum: [pending, approved, rejected, cancelled]
           description: Current request status
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        # Approval fields (only if approved)
-        approved_by:
-          type: string
-          nullable: true
-          description: Username of approving staff/admin
-        approved_at:
-          type: string
-          format: date-time
-          nullable: true
-        max_api_keys:
+        requested_rate_limit_per_minute:
           type: integer
           nullable: true
-          description: Maximum API keys granted
-        user_monthly_quota:
+          description: Requested per-minute rate limit
+        requested_rate_limit_per_hour:
           type: integer
           nullable: true
-          description: Total monthly quota granted
+          description: Requested per-hour rate limit
+        requested_rate_limit_per_day:
+          type: integer
+          nullable: true
+          description: Requested per-day rate limit
+        requested_monthly_quota:
+          type: integer
+          nullable: true
+          description: Requested monthly quota
+        approved_rate_limit_per_minute:
+          type: integer
+          nullable: true
+          description: Approved per-minute rate limit
+        approved_rate_limit_per_hour:
+          type: integer
+          nullable: true
+          description: Approved per-hour rate limit
+        approved_rate_limit_per_day:
+          type: integer
+          nullable: true
+          description: Approved per-day rate limit
+        approved_monthly_quota:
+          type: integer
+          nullable: true
+          description: Approved monthly quota
+        approved_expires_in_days:
+          type: integer
+          nullable: true
+          description: Number of days until key expires
         payment_date:
           type: string
           format: date
           nullable: true
+          description: Date when payment was received
+        payment_amount:
+          type: number
+          format: decimal
+          nullable: true
+          description: Payment amount received
         payment_proof:
           type: string
           nullable: true
           description: URL to payment proof file
-        approved_use_case:
-          type: string
-          nullable: true
         admin_notes:
           type: string
           nullable: true
-        # Rejection fields (only if rejected)
-        rejected_by:
-          type: string
-          nullable: true
-        rejected_at:
-          type: string
-          format: date-time
-          nullable: true
+          description: Internal admin notes
         rejection_reason:
           type: string
           nullable: true
+          description: Reason for rejection
+        created_at:
+          type: string
+          format: date-time
+          description: When request was created
+        updated_at:
+          type: string
+          format: date-time
+          description: When request was last updated
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When request was reviewed
+        reviewed_by:
+          type: string
+          nullable: true
+          description: Username of reviewing staff/admin
+        generated_api_key_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of generated API key (if approved)
 
     ApiKeyRequestResponse:
       type: object
@@ -4266,26 +4501,24 @@ components:
     ApiKeyRequestApprovalRequest:
       type: object
       required:
-        - max_api_keys
-        - user_monthly_quota
+        - payment_date
+        - payment_amount
+        - approved_rate_limit_per_minute
+        - approved_rate_limit_per_hour
+        - approved_rate_limit_per_day
+        - approved_monthly_quota
       properties:
-        max_api_keys:
-          type: integer
-          minimum: 1
-          default: 3
-          description: Maximum number of API keys user can create
-          example: 5
-        user_monthly_quota:
-          type: integer
-          minimum: 1
-          default: 10000
-          description: Total monthly quota across all user's API keys
-          example: 50000
         payment_date:
           type: string
           format: date
-          description: Date when payment was received (optional)
+          description: Date when payment was received
           example: "2025-11-20"
+        payment_amount:
+          type: number
+          format: decimal
+          minimum: 0
+          description: Payment amount received
+          example: 99.99
         payment_proof:
           type: string
           format: binary
@@ -4294,10 +4527,44 @@ components:
           type: string
           description: Internal notes about the approval (optional)
           example: "Approved for premium tier - annual subscription paid"
-        approved_use_case:
-          type: string
-          description: Admin-approved description of use case (optional)
-          example: "High-volume e-commerce integration"
+        approved_rate_limit_per_minute:
+          type: integer
+          minimum: 1
+          description: Approved per-minute rate limit
+          example: 100
+        approved_rate_limit_per_hour:
+          type: integer
+          minimum: 1
+          description: Approved per-hour rate limit
+          example: 1000
+        approved_rate_limit_per_day:
+          type: integer
+          minimum: 1
+          description: Approved per-day rate limit
+          example: 10000
+        approved_monthly_quota:
+          type: integer
+          minimum: 1
+          description: Approved monthly quota
+          example: 50000
+        approved_expires_in_days:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Number of days until key expires (null = never)
+          example: 365
+        max_api_keys:
+          type: integer
+          minimum: 1
+          default: 5
+          description: Maximum number of API keys user can create
+          example: 5
+        user_monthly_quota:
+          type: integer
+          minimum: 1
+          default: 1000
+          description: Total monthly quota across all user's API keys
+          example: 50000
 
     ApiKeyRequestRejectionRequest:
       type: object

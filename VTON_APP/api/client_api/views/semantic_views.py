@@ -348,6 +348,11 @@ def get_request_status(request, request_id):
     try:
         vton_request = get_object_or_404(VTONRequest, request_id=request_id)
 
+        # Access control: users can only view requests created with their API key
+        if api_key and vton_request.api_key != api_key:
+            logger.warning(f"Access denied: API key {api_key.key_id} attempted to access request {request_id} owned by API key {vton_request.api_key.key_id}")
+            return create_response("ACCESS_DENIED", {"detail": "You can only view requests created with your API key"}, status.HTTP_403_FORBIDDEN)
+
         # Create audit log for access
         try:
             AuditLog.objects.create(
