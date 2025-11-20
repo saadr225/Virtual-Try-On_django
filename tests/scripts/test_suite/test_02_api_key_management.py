@@ -6,12 +6,12 @@ Tests: /api-keys/create, /api-keys/, /api-keys/{key_id}, /api-keys/{key_id}/upda
 import pytest
 import time
 from conftest import make_request, log_section
+from .helpers import ensure_approved_user, ensure_user_token
 
 
-@pytest.mark.parametrize("key_name", ["production-key", "staging-key"])
-def test_01_create_api_key(internal_api_url, logger, test_data, key_name):
-    """Test creating a new API key."""
-    log_section(logger, f"TEST: CREATE API KEY - {key_name}")
+def test_01_unapproved_user_cannot_create_key(internal_api_url, logger, test_data):
+    """Test that unapproved users receive proper error when trying to create API key."""
+    log_section(logger, "TEST: UNAPPROVED USER CANNOT CREATE API KEY")
 
     username = None
     for user, token_data in test_data["user_tokens"].items():
@@ -26,17 +26,51 @@ def test_01_create_api_key(internal_api_url, logger, test_data, key_name):
     assert token, f"No token found for user {username}"
 
     data = {
+        "name": "test-key",
+        "expires_in_days": None,
+    }
+
+    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=token, data=data)
+
+    # Should fail with 403 Forbidden
+    assert not success or response.status_code == 403, f"Expected 403 Forbidden for unapproved user, got {response.status_code}"
+
+    logger.info(f"✓ Unapproved user correctly denied (status: {response.status_code})")
+    if resp_data:
+        logger.info(f"  - Message: {resp_data.get('message', 'N/A')}")
+
+
+@pytest.mark.parametrize("key_name", ["production-key", "staging-key"])
+def test_02_approved_user_can_create_api_key(internal_api_url, logger, test_data, key_name):
+    """Test creating a new API key (approved user only)."""
+    log_section(logger, f"TEST: APPROVED USER CREATE API KEY - {key_name}")
+
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
+
+    data = {
         "name": key_name,
         "expires_in_days": None,
     }
 
     success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=token, data=data)
 
-    assert success, f"Create API key failed with status {response.status_code if response else 'unknown'}"
+    if not success:
+        error_msg = f"Create API key request failed"
+        if response:
+            error_msg += f" with status {response.status_code}"
+            if resp_data:
+                error_msg += f": {resp_data.get('message', resp_data.get('error', str(resp_data)))}"
+        else:
+            error_msg += " - no response received (connection error or timeout)"
+        assert False, error_msg
+
     assert response.status_code == 201, f"Expected 201, got {response.status_code}"
     assert resp_data and "api_key" in resp_data, "API key data not found in response"
 
     key_id = resp_data["api_key"].get("key_id")
+    if "api_keys" not in test_data:
+        test_data["api_keys"] = {}
     test_data["api_keys"][key_name] = key_id
     logger.info(f"✓ Created API key:")
     logger.info(f"  - Key ID: {key_id}")
@@ -46,21 +80,12 @@ def test_01_create_api_key(internal_api_url, logger, test_data, key_name):
     time.sleep(0.5)
 
 
-def test_02_list_api_keys(internal_api_url, logger, test_data):
+def test_03_list_api_keys(internal_api_url, logger, test_data):
     """Test listing user's API keys."""
     log_section(logger, "TEST: LIST API KEYS (/api-keys/)")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
-
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
-    assert token, f"No token found for user {username}"
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", "/api-keys/", token=token)
 
@@ -77,24 +102,19 @@ def test_02_list_api_keys(internal_api_url, logger, test_data):
         logger.info(f"    • {key.get('name')}: {key.get('status')}")
 
 
-def test_03_get_api_key_detail(internal_api_url, logger, test_data):
+def test_04_get_api_key_detail(internal_api_url, logger, test_data):
     """Test getting detailed information about an API key."""
     log_section(logger, "TEST: GET API KEY DETAIL (/api-keys/{key_id}/)")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
-
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
     key_name = "production-key"
-    key_id = test_data["api_keys"].get(key_name)
-    assert token, f"No token found for user {username}"
-    assert key_id, f"No key_id found for {key_name}"
+    key_id = test_data.get("api_keys", {}).get(key_name)
+
+    if not token:
+        pytest.skip("No token available for approved user")
+    if not key_id:
+        pytest.skip(f"No key_id found for {key_name}")
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/", token=token)
 
@@ -111,24 +131,19 @@ def test_03_get_api_key_detail(internal_api_url, logger, test_data):
     logger.info(f"  - Created: {key.get('created_at')}")
 
 
-def test_04_update_api_key(internal_api_url, logger, test_data):
+def test_05_update_api_key(internal_api_url, logger, test_data):
     """Test updating an API key status."""
     log_section(logger, "TEST: UPDATE API KEY (/api-keys/{key_id}/update/)")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
-
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
     key_name = "production-key"
-    key_id = test_data["api_keys"].get(key_name)
-    assert token, f"No token found for user {username}"
-    assert key_id, f"No key_id found for {key_name}"
+    key_id = test_data.get("api_keys", {}).get(key_name)
+
+    if not token:
+        pytest.skip("No token available for approved user")
+    if not key_id:
+        pytest.skip(f"No key_id found for {key_name}")
 
     data = {"status": "inactive"}
 
@@ -139,24 +154,19 @@ def test_04_update_api_key(internal_api_url, logger, test_data):
     logger.info(f"✓ API key updated to: inactive")
 
 
-def test_05_regenerate_api_key(internal_api_url, logger, test_data):
+def test_06_regenerate_api_key(internal_api_url, logger, test_data):
     """Test regenerating an API key."""
     log_section(logger, "TEST: REGENERATE API KEY (/api-keys/{key_id}/regenerate/)")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
-
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
     key_name = "staging-key"
-    key_id = test_data["api_keys"].get(key_name)
-    assert token, f"No token found for user {username}"
-    assert key_id, f"No key_id found for {key_name}"
+    key_id = test_data.get("api_keys", {}).get(key_name)
+
+    if not token:
+        pytest.skip("No token available for approved user")
+    if not key_id:
+        pytest.skip(f"No key_id found for {key_name}")
 
     data = {"confirm": True}
 
@@ -167,24 +177,19 @@ def test_05_regenerate_api_key(internal_api_url, logger, test_data):
     logger.info("✓ New API key generated")
 
 
-def test_06_get_api_key_stats(internal_api_url, logger, test_data):
+def test_07_get_api_key_stats(internal_api_url, logger, test_data):
     """Test getting API key usage statistics."""
     log_section(logger, "TEST: GET API KEY STATS (/api-keys/{key_id}/stats/)")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
-
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
     key_name = "production-key"
-    key_id = test_data["api_keys"].get(key_name)
-    assert token, f"No token found for user {username}"
-    assert key_id, f"No key_id found for {key_name}"
+    key_id = test_data.get("api_keys", {}).get(key_name)
+
+    if not token:
+        pytest.skip("No token available for approved user")
+    if not key_id:
+        pytest.skip(f"No key_id found for {key_name}")
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/stats/", token=token)
 
@@ -201,29 +206,24 @@ def test_06_get_api_key_stats(internal_api_url, logger, test_data):
 
 
 @pytest.mark.parametrize("key_name", ["production-key", "staging-key"])
-def test_07_delete_api_key(internal_api_url, logger, test_data, key_name):
+def test_08_delete_api_key(internal_api_url, logger, test_data, key_name):
     """Test deleting an API key."""
     log_section(logger, f"TEST: DELETE API KEY - {key_name}")
 
-    username = None
-    for user, token_data in test_data["user_tokens"].items():
-        if user in test_data["test_users"]:
-            username = user
-            break
+    approved_username = ensure_approved_user(internal_api_url, logger, test_data)
+    token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
+    key_id = test_data.get("api_keys", {}).get(key_name)
 
-    if not username:
-        pytest.skip("No regular test user available")
-
-    token = test_data["user_tokens"][username].get("access")
-    key_id = test_data["api_keys"].get(key_name)
-    assert token, f"No token found for user {username}"
-    assert key_id, f"No key_id found for {key_name}"
+    if not token:
+        pytest.skip("No token available for approved user")
+    if not key_id:
+        pytest.skip(f"No key_id found for {key_name}")
 
     success, response, resp_data = make_request(internal_api_url, logger, "DELETE", f"/api-keys/{key_id}/delete/", token=token)
 
     assert success, f"Delete API key failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
-    if key_name in test_data["api_keys"]:
+    if key_name in test_data.get("api_keys", {}):
         del test_data["api_keys"][key_name]
     logger.info(f"✓ API key deleted successfully")

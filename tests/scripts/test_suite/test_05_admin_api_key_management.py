@@ -4,44 +4,32 @@ Tests: /admin/api-keys/, /admin/api-keys/{key_id}/update/, /admin/api-keys/{key_
 """
 
 import pytest
+import time
 from conftest import make_request, log_section
+from .helpers import ensure_admin_token, ensure_approved_user, ensure_user_token
 
 
 def test_01_admin_create_api_keys_for_testing(internal_api_url, logger, test_data):
     """Test creating API keys for admin testing operations."""
     log_section(logger, "TEST: ADMIN - CREATE API KEYS FOR ADMIN TESTS")
 
-    admin_username = None
-    for username, token_data in test_data["user_tokens"].items():
-        if token_data.get("user_type") in ["admin", "staff"]:
-            admin_username = username
-            break
+    admin_token = ensure_admin_token(internal_api_url, logger, test_data)
+    regular_username = ensure_approved_user(internal_api_url, logger, test_data)
+    regular_token = ensure_user_token(regular_username, internal_api_url, logger, test_data)
 
-    if not admin_username:
-        pytest.skip("No admin user available")
+    if "api_keys" not in test_data:
+        test_data["api_keys"] = {}
 
-    regular_username = None
-    for user in test_data["test_users"].keys():
-        regular_username = user
-        break
-
-    if not regular_username:
-        pytest.skip("No regular user available")
-
-    admin_token = test_data["user_tokens"][admin_username].get("access")
-    regular_token = test_data["user_tokens"][regular_username].get("access")
-    assert admin_token, f"No token found for admin {admin_username}"
-    assert regular_token, f"No token found for user {regular_username}"
-
-    for key_name in ["admin-test-key-1", "admin-test-key-2", "admin-test-key-3"]:
-        data = {"name": key_name, "expires_in_days": None}
+    for base_label in ["admin-test-key-1", "admin-test-key-2", "admin-test-key-3"]:
+        unique_name = f"{base_label}-{int(time.time())}"
+        data = {"name": unique_name, "expires_in_days": None}
 
         success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=regular_token, data=data)
 
         if success and response.status_code == 201 and resp_data and "api_key" in resp_data:
             key_id = resp_data["api_key"].get("key_id")
-            test_data["api_keys"][key_name] = key_id
-            logger.info(f"  ✓ Created {key_name}")
+            test_data["api_keys"][base_label] = key_id
+            logger.info(f"  ✓ Created {unique_name} (label: {base_label})")
         else:
             logger.warning(f"  ✗ Failed to create {key_name}")
 
