@@ -177,7 +177,7 @@ def admin_get_api_key_request_detail(request, request_id):
 @csrf_exempt
 def admin_approve_api_key_request(request, request_id):
     """
-    Approve an API key request and generate the API key.
+    Approve an API key request (does not create the actual API key; enables user to do so).
 
     POST /internal/api/admin/api-key-requests/{request_id}/approve/
 
@@ -196,7 +196,7 @@ def admin_approve_api_key_request(request, request_id):
         - approved_expires_in_days: integer (optional, null = never expires)
 
     Response Codes:
-        - API101: API key created successfully
+        - API101: API key request approved, user may create API keys
         - USR006: Request not found
         - API008: Request cannot be approved (not pending)
         - SYS004: Validation error
@@ -205,7 +205,11 @@ def admin_approve_api_key_request(request, request_id):
         api_key_request = APIKeyRequest.objects.select_related("user").get(request_id=request_id)
 
         if not api_key_request.can_be_approved():
-            return create_response("API_KEY_UPDATE_ERROR", {"error": f"Request cannot be approved (status: {api_key_request.status})"}, status.HTTP_400_BAD_REQUEST)
+            return create_response(
+                "API_KEY_UPDATE_ERROR",
+                {"error": f"Request cannot be approved (status: {api_key_request.status})"},
+                status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = APIKeyRequestApprovalSerializer(data=request.data)
 
@@ -233,32 +237,7 @@ def admin_approve_api_key_request(request, request_id):
 
         api_key_request.save()
 
-        # Generate the actual API key
-        expires_at = None
-        if api_key_request.approved_expires_in_days:
-            expires_at = timezone.now() + timedelta(days=api_key_request.approved_expires_in_days)
-
-        api_key_string = APIKeyCreateSerializer._generate_api_key()
-
-        api_key = APIKey.objects.create(
-            user=api_key_request.user,
-            api_key=api_key_string,
-            name=api_key_request.requested_key_name,
-            status="active",
-            rate_limit_per_minute=api_key_request.approved_rate_limit_per_minute,
-            rate_limit_per_hour=api_key_request.approved_rate_limit_per_hour,
-            rate_limit_per_day=api_key_request.approved_rate_limit_per_day,
-            monthly_quota=api_key_request.approved_monthly_quota,
-            expires_at=expires_at,
-            allowed_domains=[],
-            allowed_ips=[],
-        )
-
-        # Link the generated key to the request
-        api_key_request.generated_api_key = api_key
-        api_key_request.save()
-
-        # Enable API key generation for this user
+        # Enable API key creation for this user
         user_data, created = UserData.objects.get_or_create(user=api_key_request.user)
         user_data.is_api_approved = True
         user_data.api_key_generation_enabled = True
@@ -280,9 +259,8 @@ def admin_approve_api_key_request(request, request_id):
             action="approve",
             resource_type="APIKeyRequest",
             resource_id=str(api_key_request.request_id),
-            description=(f"API key request approved for '{api_key_request.user.username}'. " f"API key '{api_key.name}' created."),
+            description=(f"API key request approved for '{api_key_request.user.username}'. User may now create API keys."),
             new_values={
-                "api_key_id": str(api_key.key_id),
                 "payment_amount": str(validated_data["payment_amount"]),
                 "approved_quota": validated_data["approved_monthly_quota"],
             },
@@ -292,22 +270,13 @@ def admin_approve_api_key_request(request, request_id):
 
         logger.info(f"API key request approved: {api_key_request.requested_key_name} " f"for {api_key_request.user.username} by {request.user.username}")
 
-        # Return the request details with the new API key info
+        # Return the request details; no API key is generated at this step
         detail_serializer = APIKeyRequestAdminDetailSerializer(api_key_request)
 
         return create_response(
-            "API_KEY_CREATED",
-            {
-                "request": detail_serializer.data,
-                "api_key": {
-                    "key_id": str(api_key.key_id),
-                    "name": api_key.name,
-                    "api_key": api_key.api_key,  # Full key shown once
-                    "status": api_key.status,
-                    "expires_at": api_key.expires_at,
-                },
-            },
-            status.HTTP_201_CREATED,
+            "API_KEY_REQUEST_APPROVED",
+            {"request": detail_serializer.data, "message": "API key request approved; user may now create API keys."},
+            status.HTTP_200_OK,
         )
 
     except APIKeyRequest.DoesNotExist:

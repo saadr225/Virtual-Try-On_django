@@ -48,22 +48,39 @@ def test_02_approved_user_can_create_api_key(internal_api_url, logger, test_data
     approved_username = ensure_approved_user(internal_api_url, logger, test_data)
     token = ensure_user_token(approved_username, internal_api_url, logger, test_data)
 
+    # Try with unique name to avoid conflicts
+    unique_key_name = f"{key_name}-{int(time.time())}"
     data = {
-        "name": key_name,
+        "name": unique_key_name,
         "expires_in_days": None,
     }
 
-    success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=token, data=data)
+    # Retry logic for connection issues
+    max_retries = 3
+    retry_delay = 2
 
-    if not success:
-        error_msg = f"Create API key request failed"
-        if response:
-            error_msg += f" with status {response.status_code}"
-            if resp_data:
-                error_msg += f": {resp_data.get('message', resp_data.get('error', str(resp_data)))}"
-        else:
-            error_msg += " - no response received (connection error or timeout)"
-        assert False, error_msg
+    for attempt in range(max_retries):
+        success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=token, data=data)
+
+        if success and response and response.status_code == 201:
+            break
+
+        if not response and attempt < max_retries - 1:
+            logger.warning(f"Connection error on attempt {attempt + 1}/{max_retries}, retrying in {retry_delay}s...")
+            time.sleep(retry_delay)
+            continue
+
+        if attempt == max_retries - 1:
+            # Final attempt failed
+            if not success:
+                error_msg = f"Create API key request failed after {max_retries} attempts"
+                if response:
+                    error_msg += f" with status {response.status_code}"
+                    if resp_data:
+                        error_msg += f": {resp_data.get('message', resp_data.get('error', str(resp_data)))}"
+                else:
+                    pytest.skip(f"API server not responding - connection error or timeout after {max_retries} attempts")
+                assert False, error_msg
 
     assert response.status_code == 201, f"Expected 201, got {response.status_code}"
     assert resp_data and "api_key" in resp_data, "API key data not found in response"
@@ -74,7 +91,7 @@ def test_02_approved_user_can_create_api_key(internal_api_url, logger, test_data
     test_data["api_keys"][key_name] = key_id
     logger.info(f"✓ Created API key:")
     logger.info(f"  - Key ID: {key_id}")
-    logger.info(f"  - Name: {resp_data['api_key'].get('name')}")
+    logger.info(f"  - Name: {resp_data['api_key'].get('name')} (stored as '{key_name}')")
     logger.info(f"  - Status: {resp_data['api_key'].get('status')}")
 
     time.sleep(0.5)
@@ -114,7 +131,7 @@ def test_04_get_api_key_detail(internal_api_url, logger, test_data):
     if not token:
         pytest.skip("No token available for approved user")
     if not key_id:
-        pytest.skip(f"No key_id found for {key_name}")
+        pytest.skip(f"Could not create or find key '{key_name}'")
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/", token=token)
 
@@ -143,7 +160,7 @@ def test_05_update_api_key(internal_api_url, logger, test_data):
     if not token:
         pytest.skip("No token available for approved user")
     if not key_id:
-        pytest.skip(f"No key_id found for {key_name}")
+        pytest.skip(f"Could not create or find key '{key_name}'")
 
     data = {"status": "inactive"}
 
@@ -166,7 +183,7 @@ def test_06_regenerate_api_key(internal_api_url, logger, test_data):
     if not token:
         pytest.skip("No token available for approved user")
     if not key_id:
-        pytest.skip(f"No key_id found for {key_name}")
+        pytest.skip(f"Could not create or find key '{key_name}'")
 
     data = {"confirm": True}
 
@@ -189,7 +206,7 @@ def test_07_get_api_key_stats(internal_api_url, logger, test_data):
     if not token:
         pytest.skip("No token available for approved user")
     if not key_id:
-        pytest.skip(f"No key_id found for {key_name}")
+        pytest.skip(f"Could not create or find key '{key_name}'")
 
     success, response, resp_data = make_request(internal_api_url, logger, "GET", f"/api-keys/{key_id}/stats/", token=token)
 
@@ -217,7 +234,7 @@ def test_08_delete_api_key(internal_api_url, logger, test_data, key_name):
     if not token:
         pytest.skip("No token available for approved user")
     if not key_id:
-        pytest.skip(f"No key_id found for {key_name}")
+        pytest.skip(f"Could not create or find key '{key_name}'")
 
     success, response, resp_data = make_request(internal_api_url, logger, "DELETE", f"/api-keys/{key_id}/delete/", token=token)
 

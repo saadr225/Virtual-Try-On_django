@@ -20,20 +20,39 @@ def test_01_admin_create_api_keys_for_testing(internal_api_url, logger, test_dat
     if "api_keys" not in test_data:
         test_data["api_keys"] = {}
 
+    created_count = 0
     for base_label in ["admin-test-key-1", "admin-test-key-2", "admin-test-key-3"]:
         unique_name = f"{base_label}-{int(time.time())}"
         data = {"name": unique_name, "expires_in_days": None}
 
-        success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=regular_token, data=data)
+        # Add retry logic for connection issues
+        max_retries = 3
+        retry_delay = 1
 
-        if success and response.status_code == 201 and resp_data and "api_key" in resp_data:
-            key_id = resp_data["api_key"].get("key_id")
-            test_data["api_keys"][base_label] = key_id
-            logger.info(f"  ✓ Created {unique_name} (label: {base_label})")
-        else:
-            logger.warning(f"  ✗ Failed to create {key_name}")
+        for attempt in range(max_retries):
+            success, response, resp_data = make_request(internal_api_url, logger, "POST", "/api-keys/create/", token=regular_token, data=data)
 
-    logger.info(f"✓ Total test API keys available: {len([k for k in test_data['api_keys'] if k.startswith('admin-test-')])}")
+            if success and response and response.status_code == 201 and resp_data and "api_key" in resp_data:
+                key_id = resp_data["api_key"].get("key_id")
+                test_data["api_keys"][base_label] = key_id
+                logger.info(f"  ✓ Created {unique_name} (label: {base_label})")
+                created_count += 1
+                break
+
+            if not response and attempt < max_retries - 1:
+                logger.warning(f"  Connection error creating {base_label}, retrying...")
+                time.sleep(retry_delay)
+                continue
+
+            if attempt == max_retries - 1:
+                logger.warning(f"  ✗ Failed to create {base_label} after {max_retries} attempts")
+
+        time.sleep(0.3)  # Small delay between creations
+
+    logger.info(f"✓ Total test API keys created: {created_count}")
+
+    # Store the count for later tests to check
+    test_data["admin_test_keys_created"] = created_count
 
 
 def test_02_admin_list_all_api_keys(internal_api_url, logger, test_data):
@@ -147,20 +166,33 @@ def test_05_admin_update_api_key(internal_api_url, logger, test_data):
     admin_token = test_data["user_tokens"][admin_username].get("access")
     assert admin_token, f"No token found for admin {admin_username}"
 
-    # Find any admin test key to update
+    # Find any admin test key to update, or fallback to any available key
     key_name = None
-    for name in ["admin-test-key-1"]:
-        if name in test_data["api_keys"]:
+    key_id = None
+
+    # First try preferred admin test keys
+    for name in ["admin-test-key-1", "admin-test-key-2", "admin-test-key-3"]:
+        if name in test_data.get("api_keys", {}):
             key_name = name
+            key_id = test_data["api_keys"][name]
             break
 
-    if not key_name and test_data["api_keys"]:
+    # If no admin test keys, try any available key
+    if not key_id and test_data.get("api_keys"):
         key_name = list(test_data["api_keys"].keys())[0]
+        key_id = test_data["api_keys"][key_name]
 
-    if not key_name:
+    # If still no keys, try to list keys from API and use one
+    if not key_id:
+        success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/api-keys/", token=admin_token, params={"limit": 1})
+        if success and resp_data and resp_data.get("api_keys"):
+            keys = resp_data["api_keys"]
+            if keys:
+                key_id = keys[0].get("key_id")
+                key_name = keys[0].get("name")
+
+    if not key_id:
         pytest.skip("No API keys available for update test")
-
-    key_id = test_data["api_keys"][key_name]
 
     data = {
         "status": "active",
@@ -172,7 +204,7 @@ def test_05_admin_update_api_key(internal_api_url, logger, test_data):
 
     assert success, f"Admin update API key failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    logger.info(f"✓ API key updated:")
+    logger.info(f"✓ API key '{key_name}' updated:")
     logger.info(f"  - Status: active")
     logger.info(f"  - Rate limit: 200/min, 2000/hr")
 
@@ -193,16 +225,35 @@ def test_06_admin_suspend_api_key(internal_api_url, logger, test_data):
     admin_token = test_data["user_tokens"][admin_username].get("access")
     assert admin_token, f"No token found for admin {admin_username}"
 
+    # Find any admin test key, or fallback to any available key
     key_name = None
-    for name in ["admin-test-key-2"]:
-        if name in test_data["api_keys"]:
+    key_id = None
+
+    # First try preferred admin test keys
+    for name in ["admin-test-key-2", "admin-test-key-1", "admin-test-key-3"]:
+        if name in test_data.get("api_keys", {}):
             key_name = name
+            key_id = test_data["api_keys"][name]
             break
 
-    if not key_name:
-        pytest.skip("No API keys available")
+    # If no admin test keys, try any available key
+    if not key_id and test_data.get("api_keys"):
+        available_keys = [k for k in test_data["api_keys"].keys()]
+        if available_keys:
+            key_name = available_keys[0]
+            key_id = test_data["api_keys"][key_name]
 
-    key_id = test_data["api_keys"][key_name]
+    # If still no keys, try to list keys from API and use one
+    if not key_id:
+        success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/api-keys/", token=admin_token, params={"limit": 1})
+        if success and resp_data and resp_data.get("api_keys"):
+            keys = resp_data["api_keys"]
+            if keys:
+                key_id = keys[0].get("key_id")
+                key_name = keys[0].get("name")
+
+    if not key_id:
+        pytest.skip("No API keys available")
 
     data = {"status": "suspended"}
 
@@ -210,7 +261,7 @@ def test_06_admin_suspend_api_key(internal_api_url, logger, test_data):
 
     assert success, f"Suspend API key failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-    logger.info(f"✓ API key suspended")
+    logger.info(f"✓ API key '{key_name}' suspended")
 
 
 def test_07_admin_delete_api_key(internal_api_url, logger, test_data):
@@ -229,23 +280,41 @@ def test_07_admin_delete_api_key(internal_api_url, logger, test_data):
     admin_token = test_data["user_tokens"][admin_username].get("access")
     assert admin_token, f"No token found for admin {admin_username}"
 
-    # Find any admin test key to delete
+    # Find any admin test key to delete, or fallback to any available key
     key_name = None
-    for name in ["admin-test-key-3"]:
-        if name in test_data["api_keys"]:
+    key_id = None
+
+    # First try preferred admin test keys
+    for name in ["admin-test-key-3", "admin-test-key-2", "admin-test-key-1"]:
+        if name in test_data.get("api_keys", {}):
             key_name = name
+            key_id = test_data["api_keys"][name]
             break
 
-    if not key_name:
-        pytest.skip("No API keys available for delete test")
+    # If no admin test keys, try any available key (but not production/staging keys used in other tests)
+    if not key_id and test_data.get("api_keys"):
+        available_keys = [k for k in test_data["api_keys"].keys() if k not in ["production-key", "staging-key"]]
+        if available_keys:
+            key_name = available_keys[0]
+            key_id = test_data["api_keys"][key_name]
 
-    key_id = test_data["api_keys"][key_name]
+    # If still no keys, try to list keys from API and use one
+    if not key_id:
+        success, response, resp_data = make_request(internal_api_url, logger, "GET", "/admin/api-keys/", token=admin_token, params={"limit": 1})
+        if success and resp_data and resp_data.get("api_keys"):
+            keys = resp_data["api_keys"]
+            if keys:
+                key_id = keys[0].get("key_id")
+                key_name = keys[0].get("name")
+
+    if not key_id:
+        pytest.skip("No API keys available for delete test")
 
     success, response, resp_data = make_request(internal_api_url, logger, "DELETE", f"/admin/api-keys/{key_id}/delete/", token=admin_token)
 
     assert success, f"Admin delete API key failed with status {response.status_code if response else 'unknown'}"
     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
-    if key_name in test_data["api_keys"]:
+    if key_name in test_data.get("api_keys", {}):
         del test_data["api_keys"][key_name]
-    logger.info(f"✓ API key deleted successfully")
+    logger.info(f"✓ API key '{key_name}' deleted successfully")
