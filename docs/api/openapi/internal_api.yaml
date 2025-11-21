@@ -2047,13 +2047,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "FORBIDDEN"
+                  message:
+                    type: string
+                    example: "Access denied - not your request"
+                  detail:
+                    type: string
+                    example: "You do not have permission to view this API key request."
+                    nullable: true
+                  errors:
+                    type: object
+                    nullable: true
         "404":
           description: Request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "API_KEY_REQUEST_NOT_FOUND"
+                  message:
+                    type: string
+                    example: "API key request not found"
+                  detail:
+                    type: string
+                    example: "No API key request was found matching the given ID."
+                    nullable: true
+                  errors:
+                    type: object
+                    nullable: true
 
   /api-key-requests/{request_id}/cancel/:
     post:
