@@ -4429,11 +4429,6 @@ components:
           type: string
           nullable: true
           description: Username of reviewing staff/admin
-        generated_api_key_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: ID of generated API key (if approved)
 
     ApiKeyRequestResponse:
       type: object
