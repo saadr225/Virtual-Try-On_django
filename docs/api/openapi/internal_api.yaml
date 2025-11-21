@@ -1967,7 +1967,7 @@ paths:
         - `Authorization: Bearer <access_token>`
 
         **Features:**
-        - View all requests (pending, approved, rejected)
+        - View all requests (pending, approved, rejected, cancelled)
         - Filter by status
         - Paginated results
         - See approval/rejection details
@@ -1985,7 +1985,7 @@ paths:
           description: Filter by request status
           schema:
             type: string
-            enum: [pending, approved, rejected]
+            enum: [pending, approved, rejected, cancelled]
             example: pending
         - name: page
           in: query
@@ -2008,7 +2008,105 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiKeyRequestListResponse"
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "API_KEY_REQUESTS_FETCHED"
+                  message:
+                    type: string
+                    example: "API key requests retrieved successfully"
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        request_id:
+                          type: string
+                          format: uuid
+                          example: "550e8400-e29b-41d4-a716-446655440000"
+                        user:
+                          type: string
+                          example: "johndoe"
+                        requested_key_name:
+                          type: string
+                          example: "Production API Key"
+                        reason:
+                          type: string
+                          example: "Need API access for production"
+                        intended_use:
+                          type: string
+                          example: "Intended use of the API key"
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected, cancelled]
+                          example: "approved"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2025-11-15T10:00:00Z"
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: "2025-11-15T10:01:00Z"
+                        reviewed_by:
+                          type: string
+                          nullable: true
+                          example: "admin_user"
+                        reviewed_at:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          example: "2025-11-16T14:30:00Z"
+                        approved_rate_limit_per_minute:
+                          type: integer
+                          nullable: true
+                          example: 100
+                        approved_rate_limit_per_hour:
+                          type: integer
+                          nullable: true
+                          example: 1000
+                        approved_rate_limit_per_day:
+                          type: integer
+                          nullable: true
+                          example: 10000
+                        approved_monthly_quota:
+                          type: integer
+                          nullable: true
+                          example: 50000
+                        payment_date:
+                          type: string
+                          format: date
+                          nullable: true
+                          example: "2025-11-20"
+                        payment_amount:
+                          type: number
+                          format: float
+                          nullable: true
+                          example: 99.99
+                        admin_notes:
+                          type: string
+                          nullable: true
+                          example: "Approved for premium tier"
+                        rejection_reason:
+                          type: string
+                          nullable: true
+                          example: "Not aligned with our service"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 10
+                      total:
+                        type: integer
+                        example: 1
+                      pages:
+                        type: integer
+                        example: 1
               examples:
                 myRequests:
                   summary: User's requests
