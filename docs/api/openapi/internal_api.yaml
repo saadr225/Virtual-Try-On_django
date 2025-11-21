@@ -2287,36 +2287,27 @@ paths:
         - Admin - API Key Requests
       summary: Approve API Key Request (Staff/Admin)
       description: |
-        Approve an API key request and grant user API key generation access.
+        Approve a pending API key request for a user.
 
-        **Authentication:** Required (JWT access token)
-        **Authorization:** Staff or Admin role required
+        **Authentication:** JWT access token required  
+        **Permission:** Staff/Admin only
 
-        **Request Headers:**
-        - `Authorization: Bearer <access_token>`
-
-        **Process:**
-        1. Validates request is pending
-        2. Sets user quotas and limits
-        3. Enables API key generation for user
-        4. Records approval details (payment, notes, etc.)
-        5. Notifies user of approval
-
-        **What happens on approval:**
-        - User's `api_key_generation_enabled` → `true`
-        - User's `max_api_keys` set to approved value
-        - User's `user_monthly_quota` set to approved value
-        - User can now create API keys within limits
+        - Sets quota and rate limits for the user if provided
+        - Enables API key generation for the user
+        - Records approval details (payment, notes, etc.)
+        - Returns approval result and updated request data
 
         **Example cURL Request:**
         ```bash
         curl -X POST "https://your-domain.com/internal/api/admin/api-key-requests/550e8400-e29b-41d4-a716-446655440000/approve/" \
-          -H "accept: application/json" \
           -H "Authorization: Bearer ADMIN_ACCESS_TOKEN_HERE" \
-          -H "Content-Type: multipart/form-data" \
           -F "max_api_keys=5" \
-          -F "user_monthly_quota=50000" \
+          -F "approved_rate_limit_per_minute=100" \
+          -F "approved_rate_limit_per_hour=1000" \
+          -F "approved_rate_limit_per_day=10000" \
+          -F "approved_monthly_quota=50000" \
           -F "payment_date=2025-11-20" \
+          -F "payment_amount=99.99" \
           -F "payment_proof=@/path/to/receipt.pdf" \
           -F "admin_notes=Approved for premium tier"
         ```
@@ -2339,18 +2330,21 @@ paths:
                 summary: Basic approval
                 value:
                   max_api_keys: 3
-                  user_monthly_quota: 10000
-              premiumApproval:
-                summary: Premium approval with payment
+                  approved_monthly_quota: 10000
+              advancedApproval:
+                summary: Approval with detailed rate limits and payment
                 value:
                   max_api_keys: 10
-                  user_monthly_quota: 100000
+                  approved_rate_limit_per_minute: 100
+                  approved_rate_limit_per_hour: 1000
+                  approved_rate_limit_per_day: 10000
+                  approved_monthly_quota: 50000
                   payment_date: "2025-11-20"
-                  admin_notes: "Premium tier - annual subscription paid"
-                  approved_use_case: "High-volume e-commerce integration"
+                  payment_amount: 99.99
+                  admin_notes: "Approved for annual enterprise plan"
       responses:
         "200":
-          description: Request approved successfully
+          description: Approved. Updated API key request details.
           content:
             application/json:
               schema:
@@ -2359,8 +2353,8 @@ paths:
                 approved:
                   summary: Request approved
                   value:
-                    code: "API_KEY_REQUEST_APPROVED"
-                    message: "API key request approved successfully"
+                    code: API_KEY_REQUEST_APPROVED
+                    message: API key request approved successfully
                     request:
                       request_id: "550e8400-e29b-41d4-a716-446655440000"
                       user: "johndoe"
@@ -2376,7 +2370,8 @@ paths:
                       payment_amount: 99.99
                       admin_notes: "Approved for premium tier"
         "400":
-          description: Invalid request or already processed
+          description: |
+            Invalid request (missing/invalid fields, already processed, not pending, etc)
           content:
             application/json:
               schema:
