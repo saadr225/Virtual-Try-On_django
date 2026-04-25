@@ -1,287 +1,299 @@
-# Summary of Changes and New User Flow
+# Virtual Try-On Django
 
-## Overview
-
-We've transformed the API key management system from an automatic approval system to a **request-based approval workflow** with staff role management. Users now must request API key generation access, which staff/admin approves before they can create keys.
+A scalable backend service that lets users upload a person image and a garment image and receive a photorealistic try-on result powered by **Google Vertex AI**. The platform exposes two REST APIs — a public **Client API** for e-commerce integrations and a private **Internal API** for user and key management — with a full request-based approval workflow, per-key rate limiting, and audit trails.
 
 ---
 
-## New User Flow
+## Table of Contents
 
-### 1. **User Registration & Login**
+- [Features](#features)
+- [Architecture Overview](#architecture-overview)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Local Setup](#local-setup)
+  - [Docker Setup](#docker-setup)
+- [Environment Variables](#environment-variables)
+- [API Overview](#api-overview)
+  - [Client API](#client-api)
+  - [Internal API](#internal-api)
+- [User & Access Flow](#user--access-flow)
+- [Role System](#role-system)
+- [Rate Limiting](#rate-limiting)
+- [Running Tests](#running-tests)
+- [Project Structure](#project-structure)
 
-- Users can register and login normally
-- **NEW**: By default, users **cannot** create API keys
-- `api_key_generation_enabled` is set to `False` by default in UserData model
+---
 
-### 2. **API Key Request Submission (Client)**
+## Features
 
-**Endpoint**: `POST /internal/api/api-key-requests/submit/`
+- **AI-powered try-on** via Google Vertex AI (`virtual-try-on-preview-08-04`)
+- **Two separate API surfaces** — public Client API (API-key authenticated) and internal management API (JWT authenticated)
+- **Request-based API key approval** — users apply for access; staff/admin approves with custom quotas
+- **Fine-grained rate limiting** — per-minute, per-hour, per-day, and monthly quotas at both the key and user level
+- **Domain & IP whitelisting** per API key
+- **Full audit trail** — request history, approval/rejection records, payment proof uploads
+- **Staff delegation** — admins can assign staff users to handle approval queues
+- **Docker-ready** with Gunicorn + WhiteNoise for production
 
-Users submit a request containing:
+---
 
-- `business_name` (required)
-- `business_email` (required)
-- `use_case` (required) - Why they need API access
-- `expected_usage` (required) - Estimated monthly requests
-- `website` (optional)
-- `additional_info` (optional)
+## Architecture Overview
 
-**Status**: Request created with `status: "pending"`
-
-### 3. **Request Review (Staff/Admin)**
-
-Staff can view and manage requests through multiple endpoints:
-
-#### View All Requests
-
-**Endpoint**: `GET /internal/api/staff/api-key-requests/`
-
-- Filter by status: `pending`, `approved`, `rejected`
-- Pagination support
-- Search functionality
-
-#### View Single Request
-
-**Endpoint**: `GET /internal/api/staff/api-key-requests/{request_id}/`
-
-- Detailed view of specific request
-
-### 4. **Request Approval (Staff/Admin)**
-
-**Endpoint**: `POST /internal/api/staff/api-key-requests/{request_id}/approve/`
-
-Staff provides:
-
-- `max_api_keys` - How many keys user can create (default: 3)
-- `user_monthly_quota` - Total monthly quota across all keys (default: 10000)
-- `payment_date` (optional) - When payment was received
-- `payment_proof` (optional) - File attachment of payment receipt
-- `admin_notes` (optional) - Internal notes
-- `approved_use_case` (optional) - Approved description
-
-**What happens on approval:**
-
-1. Request status → `approved`
-2. User's `api_key_generation_enabled` → `True`
-3. User's `max_api_keys` set to approved value
-4. User's `user_monthly_quota` set to approved value
-5. User can now create API keys (within limits)
-
-### 5. **Request Rejection (Staff/Admin)**
-
-**Endpoint**: `POST /internal/api/staff/api-key-requests/{request_id}/reject/`
-
-Staff provides:
-
-- `rejection_reason` (required) - Why request was rejected
-- `admin_notes` (optional)
-
-**What happens on rejection:**
-
-1. Request status → `rejected`
-2. User cannot create API keys
-3. User can submit a new request later
-
-### 6. **API Key Creation (Client - After Approval)**
-
-**Endpoint**: `POST /internal/api/api-keys/create/`
-
-**NEW Validation:**
-
-- ✅ Checks if user is approved (`api_key_generation_enabled = True`)
-- ✅ Checks if user hasn't exceeded `max_api_keys` limit
-- ✅ Shows helpful error message if not approved
-
-Users can create keys within their approved quota:
-
-```json
-{
-  "name": "Production API Key"
-}
+```
+Client / E-commerce Site
+        │
+        │  X-API-Key header
+        ▼
+┌─────────────────────┐
+│    Client API        │  /api/v1/...   (rate-limited, domain/IP whitelisted)
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│   VTON Controller    │  Calls Google Vertex AI Virtual Try-On
+└────────┬────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│    Internal API      │  /internal/api/...  (JWT, staff/admin only for mgmt)
+│  - User management   │
+│  - API key mgmt      │
+│  - Quota & billing   │
+└─────────────────────┘
+         │
+         ▼
+  PostgreSQL Database
 ```
 
-### 7. **View Own Request Status (Client)**
+---
 
-**Endpoints**:
+## Tech Stack
 
-- `GET /internal/api/api-key-requests/my-requests/` - List all requests
-- `GET /internal/api/api-key-requests/{request_id}/` - View specific request
+| Layer | Technology |
+|---|---|
+| Web framework | Django 5.2, Django REST Framework 3.16 |
+| Auth | JWT (`djangorestframework-simplejwt`) |
+| AI / Try-on | Google GenAI SDK (`google-genai`), Vertex AI |
+| Database | PostgreSQL (`psycopg2-binary`) |
+| Server | Gunicorn (gthread worker) |
+| Static files | WhiteNoise |
+| Image processing | Pillow |
+| Container | Docker |
 
-Users can track their request status and see approval/rejection details.
+---
 
-### 8. **Quota Management (Client)**
+## Getting Started
 
-**Endpoint**: `GET /internal/api/quota/me/`
+### Prerequisites
 
-**Enhanced Response** now includes:
+- Python 3.11+
+- PostgreSQL 14+
+- A Google Cloud project with the **Vertex AI** Virtual Try-On API enabled
+- A Google GenAI API key
 
-- `can_create_more` - Tuple: `(boolean, error_message)`
-- Shows if user is approved
-- Shows remaining quota and key slots
+### Local Setup
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/saadr225/Virtual-Try-On_django.git
+cd Virtual-Try-On_django
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env with your database credentials and API keys
+
+# 5. Apply migrations
+cd VTON_APP
+python manage.py migrate
+
+# 6. Create a superuser
+python manage.py createsuperuser
+
+# 7. Run the development server
+python manage.py runserver
+```
+
+The server starts at `http://localhost:8000`.
+
+### Docker Setup
+
+```bash
+# Build the image
+docker build -t vton-django .
+
+# Run (pass env vars via --env-file)
+docker run -p 8080:8080 --env-file .env vton-django
+```
+
+The container runs Gunicorn on port **8080** with 3 workers x 8 threads, optimised for I/O-bound Vertex AI calls.
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values:
+
+| Variable | Description |
+|---|---|
+| `DEBUG` | `True` for development, `False` for production |
+| `ALLOWED_HOSTS` | Comma-separated hostnames |
+| `DB_HOST` / `DB_PORT` | PostgreSQL host and port |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | Database credentials |
+| `GOOGLE_GENAI_API_KEY` | Google GenAI API key for Vertex AI calls |
+| `VERTEX_AI_API_KEY` | Vertex AI API key (if separate) |
+| `HOST_URL` | Public base URL with trailing slash, used for media file URLs |
+| `DEBUG_LOG_*` | Fine-grained debug logging flags (see `.env.example`) |
+
+---
+
+## API Overview
+
+Full OpenAPI specs live in `docs/api/openapi/`.
+
+### Client API
+
+Authenticated with `X-API-Key: <key>` header. Intended for e-commerce platforms integrating the try-on feature.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/healthcheck/` | Service health check |
+| `POST` | `/api/v1/tryon/` | Submit a try-on request (person + garment images) |
+| `GET` | `/api/v1/tryon/{id}/` | Retrieve a try-on result |
+
+**Image requirements**: JPG/JPEG/PNG, max 10 MB per file, multipart/form-data.
+
+### Internal API
+
+JWT-authenticated. Covers user registration, API key management, quota tracking, and staff approval workflows.
+
+#### Authentication
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/internal/api/auth/register/` | Register a new user |
+| `POST` | `/internal/api/auth/login/` | Obtain JWT tokens |
+| `POST` | `/internal/api/auth/refresh/` | Refresh access token |
+
+#### API Key Management (requires approval)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/internal/api/api-keys/create/` | Create an API key |
+| `GET` | `/internal/api/api-keys/` | List own API keys |
+| `DELETE` | `/internal/api/api-keys/{id}/` | Revoke an API key |
+| `GET` | `/internal/api/quota/me/` | View own quota and usage |
+
+#### Access Request Flow (users)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/internal/api/api-key-requests/submit/` | Submit an access request |
+| `GET` | `/internal/api/api-key-requests/my-requests/` | View own requests |
+
+#### Staff / Admin Management
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/internal/api/staff/api-key-requests/` | List all access requests |
+| `POST` | `/internal/api/staff/api-key-requests/{id}/approve/` | Approve a request |
+| `POST` | `/internal/api/staff/api-key-requests/{id}/reject/` | Reject a request |
+
+---
+
+## User & Access Flow
+
+```
+1. Register & log in
+2. Submit an API key access request (business info, use case, expected usage)
+3. Staff/admin reviews the request
+4. On approval, quotas are set and the user can create API keys
+5. Use API keys to call the Client API from your application
+```
+
+Access requests capture:
+
+- Business name and email
+- Use case description
+- Expected monthly request volume
+- Optional website and additional notes
+- Payment proof (file upload, attached by staff on approval)
 
 ---
 
 ## Role System
 
-### 1. **Superuser/Admin**
-
-- Full system access
-- Can approve/reject requests
-- Can manage all API keys
-- Can modify quotas and rate limits
-- Can manage staff users
-
-### 2. **Staff User** (NEW)
-
-- Can view pending API key requests
-- Can approve/reject requests
-- Can set quotas when approving
-- **Cannot** manage other staff users (admin only)
-- Identified by: `user.is_staff = True` OR `user.is_superuser = True`
-
-### 3. **Regular User**
-
-- Can submit API key requests
-- Can view own request history
-- Can create API keys (only after approval)
-- Can manage own API keys
-- Cannot access admin/staff endpoints
+| Role | Capabilities |
+|---|---|
+| **Superuser** | Full access; manage staff, users, keys, quotas |
+| **Admin** (`user_type = "admin"`) | Approve/reject requests; manage users and keys |
+| **Staff** (`is_staff = True`) | View and act on pending access requests; set quotas on approval |
+| **Regular User** | Submit requests; manage own API keys after approval |
 
 ---
 
-## New Models
+## Rate Limiting
 
-### APIKeyRequest Model
+Each API key carries independent limits (configurable by admin at approval time):
 
-```python
-- user: ForeignKey to User
-- business_name: CharField
-- business_email: EmailField
-- use_case: TextField
-- expected_usage: TextField
-- website: URLField (optional)
-- additional_info: TextField (optional)
-- status: CharField (pending/approved/rejected)
-- admin_notes: TextField
-- approved_by: ForeignKey to User (nullable)
-- approved_at: DateTimeField
-- rejected_by: ForeignKey to User (nullable)
-- rejected_at: DateTimeField
-- rejection_reason: TextField
-- payment_date: DateField (optional)
-- payment_proof: FileField (optional)
-- approved_use_case: TextField
-- max_api_keys: IntegerField
-- user_monthly_quota: IntegerField
-```
+| Window | Default limit |
+|---|---|
+| Per minute | 100 requests |
+| Per hour | 1,000 requests |
+| Per day | 10,000 requests |
+| Monthly quota | 500 requests |
+
+A user-level monthly quota also caps usage across all of a user's keys (`USR022` error when exceeded). Rate limit headers are included on every response.
+
+Keys can additionally be restricted to specific **domains** and/or **IP addresses**.
 
 ---
 
-## Updated Models
-
-### UserData Model Changes
-
-```python
-# NEW Default Values:
-api_key_generation_enabled = False  # Changed from True
-max_api_keys = 0  # Changed from 3
-user_monthly_quota = 0  # Changed from 10000
-
-# NEW Method:
-can_create_api_key() -> (bool, str)
-# Returns tuple: (can_create, error_message)
-```
-
----
-
-## New Serializers
-
-1. **APIKeyRequestSerializer** - For creating requests
-2. **APIKeyRequestListSerializer** - For listing requests
-3. **APIKeyRequestDetailSerializer** - For viewing single request
-4. **APIKeyRequestApprovalSerializer** - For approving requests
-5. **APIKeyRequestRejectionSerializer** - For rejecting requests
-
----
-
-## New Permissions
-
-### IsStaffUser
-
-- Custom permission class
-- Allows staff and admin users
-- Used on all staff request management endpoints
-
-**Permission Hierarchy:**
-
-```
-Superuser (highest)
-  ↓
-Admin (user_type = "admin")
-  ↓
-Staff (is_staff = True)
-  ↓
-Regular User (lowest)
-```
-
----
-
-## File Changes
-
-### New Files Created:
-
-1. `app/models/api_key_request.py` - APIKeyRequest model
-2. `api/internal_api/serializers/api_key_request_serializers.py` - All request serializers
-3. `api/internal_api/views/client_api_request_views.py` - Client request endpoints
-4. `api/internal_api/views/admin_api_request_views.py` - Staff request management
-5. `api/internal_api/urls/client_api_request_urls.py` - Client URL routes
-6. `api/internal_api/urls/admin_api_request_urls.py` - Staff URL routes
-
-### Modified Files:
-
-1. `app/models/__init__.py` - Added APIKeyRequest import
-2. `app/models/user_data.py` - Updated defaults, added `can_create_api_key()`
-3. `api/internal_api/views/client_api_management_views.py` - Added approval check in `create_api_key()`
-4. permissions.py - Added `IsStaffUser` permission
-5. `api/internal_api/urls/__init__.py` - Added new URL patterns
-
----
-
-## Error Messages & Response Codes
-
-### New Response Scenarios:
-
-- **Not Approved**: User tries to create key without approval
-  - Returns helpful message with instructions to submit request
-- **Validation Errors**: Invalid request data
-
-  - Returns field-specific errors
-
-- **Permission Denied**: Regular user tries to access staff endpoints
-  - Returns 403 Forbidden
-
----
-
-## Migration Required
-
-Run these commands to apply changes:
+## Running Tests
 
 ```bash
-python manage.py makemigrations
-python manage.py migrate
+cd tests/scripts/test_suite
+pip install pytest
+pytest
 ```
 
-This will create the `APIKeyRequest` table and update `UserData` defaults.
+The test suite covers authentication, API key management, quota enforcement, admin/staff workflows, permissions, and general endpoint behaviour.
 
 ---
 
-## Benefits of New System
+## Project Structure
 
-1. ✅ **Better Control**: Admin approves who gets API access
-2. ✅ **Payment Tracking**: Can record payment details
-3. ✅ **Audit Trail**: Full history of requests and approvals
-4. ✅ **Quota Management**: Set custom limits per user
-5. ✅ **Staff Delegation**: Admins can delegate request management to staff
-6. ✅ **User Transparency**: Users can track their request status
-7. ✅ **Prevents Abuse**: No automatic API key generation
+```
+Virtual-Try-On_django/
+├── VTON_APP/
+│   ├── api/
+│   │   ├── client_api/          # Public try-on API
+│   │   └── internal_api/        # User, key & approval management API
+│   ├── app/
+│   │   ├── Controllers/         # VTON & helper business logic
+│   │   ├── models/              # Django ORM models
+│   │   ├── utils/               # Middleware, logging utilities
+│   │   └── views/
+│   └── VTON_APP/                # Django project settings & routing
+├── docs/
+│   └── api/openapi/             # OpenAPI 3.0 specs (client & internal)
+├── tests/
+│   └── scripts/test_suite/      # pytest integration tests
+├── .env.example                 # Environment variable template
+├── Dockerfile                   # Production Docker image
+├── entrypoint.sh                # Container startup (migrate + gunicorn)
+└── requirements.txt
+```
+
+---
+
+## License
+
+MIT
